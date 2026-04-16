@@ -446,6 +446,15 @@ public class PlayerConnectionHandler {
   }
 
   private void connectPlayerToServer(Player player, String serverName) {
+    connectPlayerToServer(player, serverName, 0);
+  }
+
+  private void connectPlayerToServer(Player player, String serverName, int attempt) {
+    if (!player.isActive()) {
+      logger.debug("Player {} is no longer active. Cancelling connect attempt to {}.", player.getUsername(), serverName);
+      return;
+    }
+
     Optional<RegisteredServer> serverOpt = proxyServer.getServer(serverName);
 
     if (serverOpt.isEmpty()) {
@@ -480,21 +489,33 @@ public class PlayerConnectionHandler {
     plugin.getStartingServersSince().remove(serverName);
     startInitiators.remove(serverName);
 
+    final int maxAttempts = 5;
     logger.info("Connecting player {} to server {}.", player.getUsername(), serverName);
     player.createConnectionRequest(targetServer).connect().whenComplete((result, throwable) -> {
+      if (!player.isActive()) {
+        logger.debug("Player {} disconnected during connect attempt to {}. Aborting retries.", player.getUsername(), serverName);
+        return;
+      }
       if (throwable != null) {
         logger.debug("Connect failed for {} to {}: {}", player.getUsername(), serverName, throwable.toString());
-        // Retry once after a short delay
-        proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName))
-            .delay(2, java.util.concurrent.TimeUnit.SECONDS)
-            .schedule();
+        if (attempt < maxAttempts) {
+          proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName, attempt + 1))
+              .delay(2, java.util.concurrent.TimeUnit.SECONDS)
+              .schedule();
+        } else {
+          logger.warn("Giving up connecting {} to {} after {} attempts.", player.getUsername(), serverName, maxAttempts);
+        }
         return;
       }
       if (result == null) {
         logger.debug("Connect returned null result for {} to {} — retrying shortly.", player.getUsername(), serverName);
-        proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName))
-            .delay(2, java.util.concurrent.TimeUnit.SECONDS)
-            .schedule();
+        if (attempt < maxAttempts) {
+          proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName, attempt + 1))
+              .delay(2, java.util.concurrent.TimeUnit.SECONDS)
+              .schedule();
+        } else {
+          logger.warn("Giving up connecting {} to {} after {} attempts.", player.getUsername(), serverName, maxAttempts);
+        }
         return;
       }
       ConnectionRequestBuilder.Status status = result.getStatus();
@@ -502,11 +523,14 @@ public class PlayerConnectionHandler {
         case SUCCESS -> logger.info("{} moved to {}", player.getUsername(), serverName);
         case ALREADY_CONNECTED -> logger.debug("{} was already on {}", player.getUsername(), serverName);
         default -> {
-          // If denied or cancelled by event logic, retry once shortly
           logger.debug("Connect status for {} to {} was {} — retrying shortly.", player.getUsername(), serverName, status);
-          proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName))
-              .delay(2, java.util.concurrent.TimeUnit.SECONDS)
-              .schedule();
+          if (attempt < maxAttempts) {
+            proxyServer.getScheduler().buildTask(plugin, () -> connectPlayerToServer(player, serverName, attempt + 1))
+                .delay(2, java.util.concurrent.TimeUnit.SECONDS)
+                .schedule();
+          } else {
+            logger.warn("Giving up connecting {} to {} after {} attempts.", player.getUsername(), serverName, maxAttempts);
+          }
         }
       }
     });
