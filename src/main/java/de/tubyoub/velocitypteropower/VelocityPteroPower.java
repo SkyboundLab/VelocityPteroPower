@@ -12,8 +12,10 @@ import de.tubyoub.velocitypteropower.api.*;
 import de.tubyoub.velocitypteropower.command.PteroCommand;
 import de.tubyoub.velocitypteropower.handler.PlayerConnectionHandler;
 import de.tubyoub.velocitypteropower.lifecycle.ServerLifecycleManager;
+import de.tubyoub.velocitypteropower.listener.BackupEventListener;
 import de.tubyoub.velocitypteropower.listener.ServerSwitchListener;
 import de.tubyoub.velocitypteropower.lobby.LobbyBalancerManager;
+import de.tubyoub.velocitypteropower.manager.BackupManager;
 import de.tubyoub.velocitypteropower.manager.ConfigurationManager;
 import de.tubyoub.velocitypteropower.manager.MessagesManager;
 import de.tubyoub.velocitypteropower.manager.MessageKey;
@@ -55,6 +57,7 @@ public class VelocityPteroPower {
     private ConfigurationManager configurationManager;
     private MessagesManager messagesManager;
     private WhitelistManager whitelistManager;
+    private BackupManager backupManager;
     private PanelAPIClient apiClient;
     private RateLimitTracker rateLimitTracker;
     private UpdateService updateService;
@@ -122,6 +125,21 @@ public class VelocityPteroPower {
             filteredLogger.warn("Mc Server Soft does not support whitelist fetching... disabling whitelist checking...");
         }
 
+        // Initialize automatic backup system
+        this.backupManager = new BackupManager(this);
+        if (configurationManager.isBackupsEnabled()) {
+            if (apiClient instanceof McServerSoftApiClient) {
+                filteredLogger.warn("Backups are enabled, but Mc Server Soft does not support the backup API. Backups will be skipped.");
+            } else {
+                filteredLogger.info("Automatic backups ENABLED. Events: {} | max {} per server | min interval {}s | prefix '{}' | {} exclusion pattern(s).",
+                        configurationManager.getBackupEvents().stream().map(e -> e.getId()).toList(),
+                        configurationManager.getMaxBackupsPerServer(),
+                        configurationManager.getBackupMinIntervalSeconds(),
+                        configurationManager.getBackupNamePrefix(),
+                        configurationManager.getBackupExcludePatterns().size());
+            }
+        }
+
         this.serverLifecycleManager = new ServerLifecycleManager(proxyServer, this);
         this.playerConnectionHandler = new PlayerConnectionHandler(proxyServer, this);
         this.serverSwitchListener = new ServerSwitchListener(this, serverLifecycleManager);
@@ -156,7 +174,7 @@ public class VelocityPteroPower {
                         try {
                             if (!apiClient.isServerOnline(name, info.getServerId())) {
                                 filteredLogger.info(messagesManager.mm(MessageKey.POWER_ACTION_SENT, java.util.Map.of("action", "start", "server", name)));
-                                apiClient.powerServer(info.getServerId(), PowerSignal.START);
+                                powerServer(name, info.getServerId(), PowerSignal.START);
                                 recordServerStartSignalSent();
                             }
                         } catch (Exception ignored) {}
@@ -203,6 +221,7 @@ public class VelocityPteroPower {
                 commandManager.metaBuilder("ptero").aliases("vpp").build(), new PteroCommand(this));
         proxyServer.getEventManager().register(this, playerConnectionHandler);
         proxyServer.getEventManager().register(this, serverSwitchListener);
+        proxyServer.getEventManager().register(this, new BackupEventListener(this));
 
         // Initialize bStats metrics and register custom charts
         this.metrics = metricsFactory.make(this, BSTATS_PLUGIN_ID);
@@ -274,7 +293,7 @@ public class VelocityPteroPower {
                     continue;
                 }
                 try {
-                    apiClient.powerServer(e.getValue().getServerId(), PowerSignal.STOP);
+                    powerServer(name, e.getValue().getServerId(), PowerSignal.STOP);
                     count++;
                 } catch (Exception ex) {
                     filteredLogger.warn("Failed sending stop on shutdown for {}: {}", name, ex.toString());
@@ -368,6 +387,21 @@ public class VelocityPteroPower {
         }
     }
 
+    /**
+     * Sends a power signal to a server and notifies the backup system, so it can
+     * trigger an automatic backup if the corresponding event is enabled.
+     *
+     * @param serverName Velocity name of the server
+     * @param serverId   Panel id of the server
+     * @param signal     The power signal to send
+     */
+    public void powerServer(String serverName, String serverId, PowerSignal signal) {
+        apiClient.powerServer(serverId, signal);
+        if (backupManager != null) {
+            backupManager.onPowerSignal(serverName, signal);
+        }
+    }
+
     private void logStartupBanner() {
         MiniMessage mm = MiniMessage.miniMessage();
         filteredLogger.info(mm.deserialize("<#4287f5>____   ________________________"));
@@ -418,6 +452,10 @@ public class VelocityPteroPower {
 
     public WhitelistManager getWhitelistManager() {
         return whitelistManager;
+    }
+
+    public BackupManager getBackupManager() {
+        return backupManager;
     }
 
     public PanelAPIClient getApiClient() {

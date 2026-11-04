@@ -3,6 +3,8 @@
  */
 package de.tubyoub.velocitypteropower.manager;
 
+import de.tubyoub.velocitypteropower.model.BackupEvent;
+import de.tubyoub.velocitypteropower.model.BackupPolicy;
 import de.tubyoub.velocitypteropower.model.PteroServerInfo;
 import de.tubyoub.velocitypteropower.VelocityPteroPower;
 import de.tubyoub.velocitypteropower.api.PanelType;
@@ -77,6 +79,15 @@ public class ConfigurationManager {
     private boolean moveHistoryEnabled;
     private int moveHistoryMaxEntries;
 
+    // Automatic backups
+    private boolean backupsEnabled;
+    private Set<BackupEvent> backupEvents = EnumSet.of(BackupEvent.SERVER_START, BackupEvent.SERVER_STOP);
+    private int maxBackupsPerServer = 5;
+    private int backupMinIntervalSeconds = 60;
+    private boolean pruneBackupsBeforeCreate;
+    private String backupNamePrefix = "vpp-auto";
+    private List<String> backupExcludePatterns = Collections.emptyList();
+
     // Lifecycle
     private List<String> shutdownOnProxyExitList;
 
@@ -138,6 +149,7 @@ public class ConfigurationManager {
                                         .addIgnoredRoute("12", "servers", '.')
                                         .addIgnoredRoute("13", "servers", '.')
                                         .addIgnoredRoute("14", "servers", '.')
+                                        .addIgnoredRoute("15", "servers", '.')
                                         .build());
 
 
@@ -175,6 +187,20 @@ public class ConfigurationManager {
             } else {
                 moveHistoryEnabled = false;
                 moveHistoryMaxEntries = 50;
+            }
+
+            // Backups section (defaults are set at field declaration)
+            Section backups = config.getSection("backups");
+            if (backups != null) {
+                backupsEnabled = backups.getBoolean("enabled", false);
+                maxBackupsPerServer = backups.getInt("maxBackupsPerServer", 5);
+                backupMinIntervalSeconds = backups.getInt("minIntervalSeconds", 60);
+                pruneBackupsBeforeCreate = backups.getBoolean("pruneBeforeCreate", false);
+                backupNamePrefix = backups.getString("namePrefix", "vpp-auto");
+                backupExcludePatterns = backups.getStringList("excludeServers");
+                if (backups.contains("events")) {
+                    backupEvents = parseBackupEvents(backups.getStringList("events"), "backups.events");
+                }
             }
 
             // Lifecycle section
@@ -334,7 +360,8 @@ public class ConfigurationManager {
                             int timeout = serverInfoDataSection.getInt("timeout", -1);
                             int startupJoinDelay = serverInfoDataSection.getInt("startupJoinDelay", 10);
                             boolean whitelist = serverInfoDataSection.getBoolean("whitelist", false);
-                            serverInfoMap.put(key, new PteroServerInfo(id, timeout, startupJoinDelay, whitelist));
+                            BackupPolicy backupPolicy = parseBackupPolicy(serverInfoDataSection, key);
+                            serverInfoMap.put(key, new PteroServerInfo(id, timeout, startupJoinDelay, whitelist, backupPolicy));
                             logger.info("Registered Server: " + id + " successfully");
                         }
                     } catch (Exception e) {
@@ -344,6 +371,41 @@ public class ConfigurationManager {
             }
             return serverInfoMap;
         }
+
+    /**
+     * Parses the optional per-server 'backups' section into a {@link BackupPolicy}.
+     * Unset fields stay null and inherit the global 'backups' config.
+     *
+     * @param serverSection the section of a single server under 'servers'
+     * @param serverKey the server name (for logging)
+     * @return the parsed policy, or null if the server has no 'backups' section
+     */
+    private BackupPolicy parseBackupPolicy(Section serverSection, String serverKey) {
+        Section section = serverSection.getSection("backups");
+        if (section == null) return null;
+
+        return new BackupPolicy(
+                section.getOptionalBoolean("enabled").orElse(null),
+                section.getOptionalStringList("events")
+                        .map(events -> parseBackupEvents(events, "servers." + serverKey + ".backups.events"))
+                        .orElse(null),
+                section.getOptionalInt("maxBackups").orElse(null),
+                section.getOptionalInt("minIntervalSeconds").orElse(null));
+    }
+
+    private Set<BackupEvent> parseBackupEvents(List<String> rawEvents, String configPath) {
+        Set<BackupEvent> events = EnumSet.noneOf(BackupEvent.class);
+        for (String raw : rawEvents) {
+            BackupEvent event = BackupEvent.fromString(raw);
+            if (event != null) {
+                events.add(event);
+            } else {
+                logger.warn("Unknown backup event '{}' in '{}' (valid: server_start, server_stop, server_join, server_leave, network_join, network_leave).",
+                        raw, configPath);
+            }
+        }
+        return events;
+    }
 
     private PanelType detectPanelType(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
@@ -535,6 +597,62 @@ public class ConfigurationManager {
 
     public boolean isMoveHistoryEnabled() { return moveHistoryEnabled; }
     public int getMoveHistoryMaxEntries() { return Math.max(1, moveHistoryMaxEntries); }
+
+    public boolean isBackupsEnabled() { return backupsEnabled; }
+
+    public Set<BackupEvent> getBackupEvents() {
+        return backupEvents == null ? Collections.emptySet() : backupEvents;
+    }
+
+    /** Maximum number of automatic backups kept per server. 0 or less = unlimited (no deletion). */
+    public int getMaxBackupsPerServer() { return maxBackupsPerServer; }
+
+    /** Minimum seconds between two automatic backups of the same server. 0 or less = no throttle. */
+    public int getBackupMinIntervalSeconds() { return backupMinIntervalSeconds; }
+
+    /** Whether old automatic backups are pruned before the new backup is created (instead of after). */
+    public boolean isPruneBackupsBeforeCreate() { return pruneBackupsBeforeCreate; }
+
+    public String getBackupNamePrefix() {
+        return (backupNamePrefix == null || backupNamePrefix.isBlank()) ? "vpp-auto" : backupNamePrefix;
+    }
+
+    public List<String> getBackupExcludePatterns() {
+        return backupExcludePatterns == null ? Collections.emptyList() : backupExcludePatterns;
+    }
+
+    /**
+     * Checks whether a server name matches any of the configured 'backups.excludeServers'
+     * glob patterns (case-insensitive, '*' matches any sequence, '?' any single char).
+     *
+     * @param serverName the Velocity name of the server
+     * @return true if the server is excluded from automatic backups
+     */
+    public boolean isBackupExcluded(String serverName) {
+        if (serverName == null || backupExcludePatterns == null) return false;
+        String name = serverName.toLowerCase(Locale.ROOT);
+        for (String pattern : backupExcludePatterns) {
+            if (pattern == null || pattern.isBlank()) continue;
+            if (globMatches(pattern.trim().toLowerCase(Locale.ROOT), name)) return true;
+        }
+        return false;
+    }
+
+    private static boolean globMatches(String glob, String value) {
+        StringBuilder regex = new StringBuilder(glob.length() * 2);
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            switch (c) {
+                case '*' -> regex.append(".*");
+                case '?' -> regex.append('.');
+                default -> {
+                    if ("\\.[]{}()+-^$|".indexOf(c) >= 0) regex.append('\\');
+                    regex.append(c);
+                }
+            }
+        }
+        return value.matches(regex.toString());
+    }
 
     public java.util.List<String> getShutdownOnProxyExitList() {
         return shutdownOnProxyExitList == null ? java.util.Collections.emptyList() : shutdownOnProxyExitList;

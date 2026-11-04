@@ -250,7 +250,7 @@ public class PlayerConnectionHandler {
       startInitiators.putIfAbsent(serverName, player.getUniqueId());
       plugin.getStartingServersSince().put(serverName, System.currentTimeMillis());
       playerCooldowns.put(player.getUniqueId(), System.currentTimeMillis());
-      apiClient.powerServer(serverId, PowerSignal.START);
+      plugin.powerServer(serverName, serverId, PowerSignal.START);
       plugin.recordServerStartSignalSent();
       scheduleInitialIdleCheck(serverName, serverId);
     }
@@ -566,7 +566,7 @@ public class PlayerConnectionHandler {
                     logger.info(
                         messagesManager.raw(MessageKey.SERVER_IDLE_SHUTDOWN)
                             .replace("<server>", serverName));
-                    apiClient.powerServer(serverId, PowerSignal.STOP);
+                    plugin.powerServer(serverName, serverId, PowerSignal.STOP);
                     startingServers.remove(serverName);
                   } else {
                     logger.debug("Initial idle check for {}: Players present. Cancelling idle shutdown task.", serverName);

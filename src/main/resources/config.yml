@@ -4,7 +4,7 @@
 ################################
 
 # Version of the configuration file
-fileversion: 14
+fileversion: 15
 
 # Check for updates
 # If true, the plugin will check for updates on startup.
@@ -155,6 +155,71 @@ moveHistory:
   # Maximum number of recent moves to retain per player (latest first)
   maxEntriesPerPlayer: 50
 
+# Automatic panel backups
+# When enabled, VPP creates a backup on the panel whenever one of the configured events occurs.
+# The oldest automatic backups of that server are deleted on the panel so that at most
+# 'maxBackupsPerServer' remain (see 'pruneBeforeCreate' for when this happens).
+# Only backups whose name starts with 'namePrefix' are counted and deleted - manually
+# created backups are left untouched.
+# Note: Mc Server Soft does not support the backup API; backups are skipped for that panel type.
+backups:
+  # default = false
+  enabled: false
+
+  # Which events trigger an automatic backup.
+  # Available events:
+  #   server_start   - a start signal was sent to a managed server (by a player, command, balancer, ...)
+  #   server_stop    - a stop signal was sent to a managed server (idle shutdown, command, ...)
+  #   server_join    - a player entered a managed backend server
+  #   server_leave   - a player left a managed backend server (switched servers or disconnected)
+  #   network_join   - a player joined the proxy/network (backs up the first server they connect to)
+  #   network_leave  - a player left the proxy/network (backs up the managed server they were on)
+  # default = [server_start, server_stop]
+  events:
+    - server_start
+    - server_stop
+
+  # Maximum number of automatic backups kept per server.
+  # Older automatic backups are deleted when a new one is created.
+  # 0 = unlimited (no old backups are deleted)
+  # default = 5
+  maxBackupsPerServer: 5
+
+  # Run the retention prune before creating the new backup instead of after it.
+  # false = create the new backup first, then delete the oldest ones (default)
+  # true  = delete the oldest ones first and wait for that to finish, then create
+  # When pruning before, one slot is kept free so the new backup fits within
+  # 'maxBackupsPerServer' afterwards.
+  # default = false
+  pruneBeforeCreate: false
+
+  # Minimum time in seconds between two automatic backups of the same server.
+  # Protects the panel API from spam on frequent events (e.g. player_join/player_leave).
+  # 0 = no limit
+  # default = 60
+  minIntervalSeconds: 60
+
+  # Name prefix for automatic backups (used to identify the backups VPP manages)
+  # default = vpp-auto
+  namePrefix: "vpp-auto"
+
+  # Exclusion patterns: servers whose name matches any of these (glob, case-insensitive;
+  # '*' matches any sequence of characters, '?' a single one) NEVER get automatic backups,
+  # regardless of global or per-server backup settings.
+  # Examples: "limbo*", "lobby-?", "hub", "test-*"
+  # default = []
+  excludeServers: []
+
+  # Per-server overrides live in the 'servers' section, e.g.:
+  #   servers:
+  #     survival:
+  #       id: "1234abcd"
+  #       backups:
+  #         enabled: true          # override global 'backups.enabled' for this server only
+  #         events: [server_stop]  # override the global event list
+  #         maxBackups: 3          # override the global retention limit (0 = unlimited)
+  #         minIntervalSeconds: 60 # override the global min interval
+
 # Lifecycle related behavior
 lifecycle:
   # When the proxy shuts down, stop these servers.
@@ -273,3 +338,13 @@ servers:
     # If VPP should fetch the whitelist of the Server and enforce it when a player trys to start a server
     # default: false
     whitelist: false
+
+    # Optional per-server backup policy (overrides the global 'backups' section for this server).
+    # All keys are optional; anything not set falls back to the global value.
+    # backups:
+    #   enabled: true            # false = never back up this server
+    #   events:                  # any of: server_start, server_stop, server_join, server_leave,
+    #                            #          network_join, network_leave
+    #     - server_stop
+    #   maxBackups: 3            # 0 = unlimited
+    #   minIntervalSeconds: 60

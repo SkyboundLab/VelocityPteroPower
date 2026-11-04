@@ -216,7 +216,7 @@ public class LobbyBalancerManager {
             // If the check fails due to transient issues, fall through to attempt start once per throttle window
         }
         logger.info("Starting lobby '{}' ({}).", serverName, info.getServerId());
-        apiClient.powerServer(info.getServerId(), PowerSignal.START);
+        plugin.powerServer(serverName, info.getServerId(), PowerSignal.START);
         lastStartAttempt.put(serverName, now);
         return true;
     }

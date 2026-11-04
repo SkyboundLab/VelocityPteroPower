@@ -184,7 +184,7 @@ public class PteroCommand implements SimpleCommand {
             }
 
             if (rateLimitTracker.canMakeRequest()) {
-                apiClient.powerServer(serverInfo.getServerId(), PowerSignal.STOP);
+                plugin.powerServer(serverName, serverInfo.getServerId(), PowerSignal.STOP);
                 stoppedCount++;
             } else {
                 sender.sendMessage(messages.prefixed(MessageKey.COMMAND_RATE_LIMIT_EXCEEDED));
@@ -240,7 +240,7 @@ public class PteroCommand implements SimpleCommand {
             PteroServerInfo serverInfo = entry.getValue();
 
             if (rateLimitTracker.canMakeRequest()) {
-                apiClient.powerServer(serverInfo.getServerId(), PowerSignal.STOP);
+                plugin.powerServer(entry.getKey(), serverInfo.getServerId(), PowerSignal.STOP);
                 stoppedCount++;
             } else {
                 sender.sendMessage(messages.prefixed(MessageKey.COMMAND_RATE_LIMIT_EXCEEDED));
@@ -290,7 +290,7 @@ public class PteroCommand implements SimpleCommand {
         for (Map.Entry<String, PteroServerInfo> entry : serverInfoMap.entrySet()) {
             PteroServerInfo serverInfo = entry.getValue();
             if (rateLimitTracker.canMakeRequest()) {
-                apiClient.powerServer(serverInfo.getServerId(), PowerSignal.START);
+                plugin.powerServer(entry.getKey(), serverInfo.getServerId(), PowerSignal.START);
                 plugin.recordServerStartSignalSent();
                 started++;
             } else {
@@ -343,7 +343,7 @@ public class PteroCommand implements SimpleCommand {
                         }
                     }
                 }
-                apiClient.powerServer(info.getServerId(), PowerSignal.START);
+                plugin.powerServer(serverName, info.getServerId(), PowerSignal.START);
                 plugin.recordServerStartSignalSent();
             }
             sender.sendMessage(
@@ -368,7 +368,7 @@ public class PteroCommand implements SimpleCommand {
         if (serverInfoMap.containsKey(serverName)) {
             PteroServerInfo info = serverInfoMap.get(serverName);
             if (rateLimitTracker.canMakeRequest()) {
-                apiClient.powerServer(info.getServerId(), PowerSignal.STOP);
+                plugin.powerServer(serverName, info.getServerId(), PowerSignal.STOP);
             }
             sender.sendMessage(
                     messages.prefixed(

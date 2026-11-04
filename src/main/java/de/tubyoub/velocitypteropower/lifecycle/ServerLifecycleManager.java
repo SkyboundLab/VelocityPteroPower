@@ -103,7 +103,7 @@ public class ServerLifecycleManager {
                       messages.mm(
                           MessageKey.POWER_ACTION_SENT,
                           Map.of("action", "stop", "server", serverName)));
-                  apiClient.powerServer(serverId, PowerSignal.STOP);
+                  plugin.powerServer(serverName, serverId, PowerSignal.STOP);
                   shutdownRetryCounts.put(serverName, 0);
                   scheduleShutdownConfirmationCheck(serverName, serverId);
                 } else {
@@ -220,7 +220,7 @@ public class ServerLifecycleManager {
                                 "retry", String.valueOf(nextRetry),
                                 "maxretries", String.valueOf(maxRetries))));
 
-                    apiClient.powerServer(serverId, PowerSignal.STOP);
+                    plugin.powerServer(serverName, serverId, PowerSignal.STOP);
                     scheduleShutdownConfirmationCheck(serverName, serverId);
                   } else {
                     // Players came back — cancel shutdown process
@@ -377,7 +377,7 @@ public class ServerLifecycleManager {
               boolean online = apiClient.isServerOnline(name, id);
               if (!online) {
                 logger.info(messages.mm(MessageKey.POWER_ACTION_SENT, Map.of("action", "start", "server", name)));
-                apiClient.powerServer(id, PowerSignal.START);
+                plugin.powerServer(name, id, PowerSignal.START);
                 plugin.recordServerStartSignalSent();
               }
             }

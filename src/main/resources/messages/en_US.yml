@@ -1,5 +1,5 @@
 # VelocityPteroPower messages - English (US), MiniMessage
-fileversion: 2
+fileversion: 3
 
 # Use MiniMessage for styling. You can add gradients, hover, click, etc.
 # Example gradient prefix:
@@ -61,3 +61,8 @@ power:
   action-sent: "<gray>Sent power action</gray> '<yellow><action></yellow>' <gray>to server</gray> '<yellow><server></yellow>'."
   action-failed: "<red>Failed to execute power action</red> '<yellow><action></yellow>' <red>on server</red> '<yellow><server></yellow>': <gray><reason></gray>"
   status: "<gray>Server</gray> '<yellow><server></yellow>' <gray>status:</gray> <yellow><status></yellow>"
+
+backup:
+  created: "<gray>Created backup</gray> <yellow><backup></yellow> <gray>for server</gray> <yellow><server></yellow> <gray>(event:</gray> <yellow><event></yellow><gray>).</gray>"
+  deleted: "<gray>Deleted old backup</gray> <yellow><backup></yellow> <gray>of server</gray> <yellow><server></yellow> <gray>(retention limit reached).</gray>"
+  failed: "<red>Backup for server</red> <yellow><server></yellow> <red>failed:</red> <gray><reason></gray>"

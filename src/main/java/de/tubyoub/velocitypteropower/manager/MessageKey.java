@@ -62,7 +62,12 @@ public enum MessageKey {
     // Pterodactyl/Power actions (example keys)
     POWER_ACTION_SENT("power.action-sent"),
     POWER_ACTION_FAILED("power.action-failed"),
-    POWER_STATUS("power.status");
+    POWER_STATUS("power.status"),
+
+    // Backups
+    BACKUP_CREATED("backup.created"),
+    BACKUP_DELETED("backup.deleted"),
+    BACKUP_FAILED("backup.failed");
 
     private final String path;
 

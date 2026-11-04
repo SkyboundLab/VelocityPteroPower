@@ -11,12 +11,15 @@ import de.tubyoub.velocitypteropower.VelocityPteroPower;
 import de.tubyoub.velocitypteropower.util.RateLimitTracker;
 import org.slf4j.Logger;
 
+import de.tubyoub.velocitypteropower.model.BackupInfo;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
 
@@ -503,6 +506,22 @@ public class PterodactylAPIClient extends AbstractPanelAPIClient {
         logger.debug(future.toString());
         return future;
     }
+
+    @Override
+    public CompletableFuture<Boolean> createBackup(String serverId, String backupName) {
+        return createBackupRequest(serverId, backupName);
+    }
+
+    @Override
+    public CompletableFuture<List<BackupInfo>> listBackups(String serverId) {
+        return listBackupsRequest(serverId);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> deleteBackup(String serverId, String backupUuid) {
+        return deleteBackupRequest(serverId, backupUuid);
+    }
+
     public boolean isApiKeyValid(String apiKey) {
             if (!rateLimitTracker.canMakeRequest()) {
             logger.warn("Rate limit reached. Cannot check if ApiKey is valid}.");

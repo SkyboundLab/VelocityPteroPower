@@ -1,15 +1,25 @@
 package de.tubyoub.velocitypteropower.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerPing;
 import de.tubyoub.velocitypteropower.VelocityPteroPower;
 import de.tubyoub.velocitypteropower.manager.ConfigurationManager;
+import de.tubyoub.velocitypteropower.model.BackupInfo;
 import de.tubyoub.velocitypteropower.util.RateLimitTracker;
 import org.slf4j.Logger;
 
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.*;
 
@@ -23,6 +33,8 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
             this.data = data;
         }
     }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     // per-server resource usage cache
     protected final java.util.concurrent.ConcurrentHashMap<String, CacheEntry> resourceCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -180,6 +192,140 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
      */
     public void shutdown() {
         executorService.shutdownNow();
+    }
+
+    /**
+     * Creates a backup for a server using the Pterodactyl/Pelican client API.
+     */
+    protected CompletableFuture<Boolean> createBackupRequest(String serverId, String backupName) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (isBlank(serverId) || !canMakeRequest("backup creation", serverId)) return false;
+            try {
+                String body = isBlank(backupName) ? "{}" : JSON.writeValueAsString(Map.of("name", backupName));
+                HttpRequest request = clientApiRequest(serverId, "/backups")
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .timeout(Duration.ofSeconds(15))
+                        .build();
+                HttpResponse<String> response = send(request);
+                boolean ok = isSuccess(response.statusCode());
+                if (ok) {
+                    logger.debug("Backup creation accepted for {} (HTTP {}).", serverId, response.statusCode());
+                } else {
+                    logger.warn("Backup creation for {} failed with HTTP {}: {}",
+                            serverId, response.statusCode(), abbreviate(response.body()));
+                }
+                return ok;
+            } catch (Exception e) {
+                logger.error("Error creating backup for {}: {}", serverId, e.toString());
+                return false;
+            }
+        }, executorService);
+    }
+
+    /**
+     * Lists all backups of a server using the Pterodactyl/Pelican client API.
+     */
+    protected CompletableFuture<List<BackupInfo>> listBackupsRequest(String serverId) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<BackupInfo> backups = new ArrayList<>();
+            if (isBlank(serverId) || !canMakeRequest("backup list", serverId)) return backups;
+            try {
+                for (int page = 1; page <= 50; page++) {
+                    HttpRequest request = clientApiRequest(serverId, "/backups?per_page=100&page=" + page)
+                            .GET()
+                            .timeout(Duration.ofSeconds(15))
+                            .build();
+                    HttpResponse<String> response = send(request);
+                    if (response.statusCode() != 200 || response.body() == null) {
+                        logger.warn("Backup list for {} (page {}) failed with HTTP {}", serverId, page, response.statusCode());
+                        break;
+                    }
+                    JsonNode root = JSON.readTree(response.body());
+                    for (JsonNode backup : root.path("data")) {
+                        JsonNode attributes = backup.path("attributes");
+                        String uuid = attributes.path("uuid").asText(null);
+                        if (uuid != null) {
+                            backups.add(new BackupInfo(
+                                    uuid,
+                                    attributes.path("name").asText(null),
+                                    parseTimestamp(attributes.path("created_at").asText(null))));
+                        }
+                    }
+                    if (page >= root.path("meta").path("pagination").path("total_pages").asInt(1)) break;
+                    if (!rateLimitTracker.canMakeRequest()) break;
+                }
+            } catch (Exception e) {
+                logger.error("Error listing backups for {}: {}", serverId, e.toString());
+            }
+            return backups;
+        }, executorService);
+    }
+
+    /**
+     * Deletes a backup of a server using the Pterodactyl/Pelican client API.
+     */
+    protected CompletableFuture<Boolean> deleteBackupRequest(String serverId, String backupUuid) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (isBlank(serverId) || isBlank(backupUuid) || !canMakeRequest("backup deletion", serverId)) return false;
+            try {
+                HttpRequest request = clientApiRequest(serverId, "/backups/" + backupUuid)
+                        .DELETE()
+                        .timeout(Duration.ofSeconds(15))
+                        .build();
+                HttpResponse<String> response = send(request);
+                boolean ok = isSuccess(response.statusCode());
+                if (ok) {
+                    logger.debug("Backup {} deleted for {} (HTTP {}).", backupUuid, serverId, response.statusCode());
+                } else {
+                    logger.warn("Backup deletion for {}/{} failed with HTTP {}", serverId, backupUuid, response.statusCode());
+                }
+                return ok;
+            } catch (Exception e) {
+                logger.error("Error deleting backup {} for {}: {}", backupUuid, serverId, e.toString());
+                return false;
+            }
+        }, executorService);
+    }
+
+    private HttpRequest.Builder clientApiRequest(String serverId, String path) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(configurationManager.getPterodactylUrl() + "api/client/servers/" + serverId + path))
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + configurationManager.getPterodactylApiKey());
+    }
+
+    private HttpResponse<String> send(HttpRequest request) throws Exception {
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        rateLimitTracker.updateRateLimitInfo(response);
+        return response;
+    }
+
+    private boolean canMakeRequest(String action, String serverId) {
+        if (rateLimitTracker.canMakeRequest()) return true;
+        logger.warn("Rate limit reached. Skipping {} for {}.", action, serverId);
+        return false;
+    }
+
+    private static boolean isSuccess(int statusCode) {
+        return statusCode >= 200 && statusCode < 300;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String abbreviate(String value) {
+        return value == null ? "null" : value.substring(0, Math.min(value.length(), 200));
+    }
+
+    private static long parseTimestamp(String iso) {
+        if (isBlank(iso)) return 0L;
+        try {
+            return OffsetDateTime.parse(iso).toInstant().toEpochMilli();
+        } catch (Exception ignored) {
+            return 0L;
+        }
     }
 
     /**

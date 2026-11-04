@@ -8,6 +8,7 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerPing;
 import de.tubyoub.velocitypteropower.manager.ConfigurationManager;
 import de.tubyoub.velocitypteropower.VelocityPteroPower;
+import de.tubyoub.velocitypteropower.model.BackupInfo;
 import de.tubyoub.velocitypteropower.util.FilteredComponentLogger;
 import de.tubyoub.velocitypteropower.util.RateLimitTracker;
 import net.kyori.adventure.text.Component;
@@ -18,6 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
 
@@ -449,6 +451,22 @@ public class PelicanAPIClient extends AbstractPanelAPIClient {
 
     return future;
 }
+
+    @Override
+    public CompletableFuture<Boolean> createBackup(String serverId, String backupName) {
+        return createBackupRequest(serverId, backupName);
+    }
+
+    @Override
+    public CompletableFuture<List<BackupInfo>> listBackups(String serverId) {
+        return listBackupsRequest(serverId);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> deleteBackup(String serverId, String backupUuid) {
+        return deleteBackupRequest(serverId, backupUuid);
+    }
+
     public boolean isApiKeyValid(String apiKey) {
         if (!rateLimitTracker.canMakeRequest()) {
             logger.warn("Rate limit reached. Cannot check if ApiKey is valid}.");
