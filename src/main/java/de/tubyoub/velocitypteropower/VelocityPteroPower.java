@@ -389,8 +389,8 @@ public class VelocityPteroPower {
         filteredLogger.error(" ");
         filteredLogger.error(" No valid API key found or configured in config.yml.");
         filteredLogger.error(" Please ensure 'pterodactyl.apiKey' is set correctly.");
-        filteredLogger.error(" Key should start with 'ptlc_' (Client) or 'plcn_' (Pelican).");
-        filteredLogger.error(" Application API keys ('ptla_') are NOT supported.");
+        filteredLogger.error(" Key should start with 'ptlc_' (Pterodactyl), 'plcn_'/'pacc_' (Pelican) or 'c7sp_' (Calagopus).");
+        filteredLogger.error(" Application API keys ('ptla_'/'peli_') are NOT supported.");
         filteredLogger.error(" ");
         filteredLogger.error(" Plugin will be disabled.");
         filteredLogger.error("=================================================");

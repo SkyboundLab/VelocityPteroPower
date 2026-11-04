@@ -356,6 +356,11 @@ public class ConfigurationManager {
                 logger.debug("Detected pterodactyl panel from apiKey");
                 yield PanelType.pterodactyl;
             }
+            case "c7sp" -> {
+                // Calagopus uses the Pterodactyl-compatible client API (/api/client/... with Bearer auth)
+                logger.debug("Detected Calagopus panel from apiKey (Pterodactyl-compatible API)");
+                yield PanelType.pterodactyl;
+            }
             case "plcn", "pacc"-> {
                 logger.debug("Detected pelican panel from apiKey");
                 yield PanelType.pelican;
@@ -365,7 +370,7 @@ public class ConfigurationManager {
                 yield PanelType.error;
             }
             default -> {
-                logger.info("API Key has no recognized prefix, assuming mcServerSoft.");
+                logger.warn("API Key has no recognized prefix ('{}'), assuming mcServerSoft. If you use Pterodactyl/Pelican/Calagopus, use a client API key (ptlc_/plcn_/pacc_/c7sp_).", prefix);
                 yield PanelType.mcServerSoft;
             }
         };

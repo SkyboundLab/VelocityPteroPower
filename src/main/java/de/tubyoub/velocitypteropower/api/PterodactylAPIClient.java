@@ -273,9 +273,23 @@ public class PterodactylAPIClient extends AbstractPanelAPIClient {
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + configurationManager.getPterodactylApiKey())
                 .POST(HttpRequest.BodyPublishers.ofString("{\"signal\": \"" + signal.getApiSignal() + "\"}"))
+                .timeout(Duration.ofSeconds(10))
                 .build();
 
-            rateLimitTracker.updateRateLimitInfo(httpClient.send(request, HttpResponse.BodyHandlers.ofString()));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            rateLimitTracker.updateRateLimitInfo(response);
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String body = response.body();
+                logger.warn(
+                    "Power signal {} for server {} failed with HTTP {}: {}",
+                    signal,
+                    serverId,
+                    response.statusCode(),
+                    body != null ? body.substring(0, Math.min(body.length(), 200)) : "null"
+                );
+            } else {
+                logger.debug("Power signal {} sent to server {} (HTTP {})", signal, serverId, response.statusCode());
+            }
         } catch (Exception e) {
             logger.error("Error powering server.", e);
         }
@@ -364,9 +378,8 @@ public class PterodactylAPIClient extends AbstractPanelAPIClient {
                 String responseBody = response.body();
                 if (response.statusCode() == 200 && responseBody != null) {
                     // Check if the state attribute indicates running
-                    // A more robust solution would parse the JSON properly
-                    boolean running =
-                        responseBody.contains("\"current_state\":\"running\"");
+                    String state = extractString(responseBody, "\"current_state\"");
+                    boolean running = "running".equalsIgnoreCase(state);
                     logger.debug(
                         "API check for {} (ID {}): Status {}, State Running: {}",
                         serverName,

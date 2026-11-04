@@ -241,8 +241,8 @@ pterodactyl:
   # If you use Cloudflare Tunnel, you need to allow the ip in the bypass setting.
   url: "https://panel.example.com"
   # The client api key of your panel.
-  # The Plugin supports the Pterodactyl & Pelican System.
-  # Your API Key should start with "ptlc_" or "pacc" if you are using the Ptero or Peli Panel
+  # The Plugin supports the Pterodactyl, Pelican, Calagopus & Mc Server Soft systems.
+  # Your API Key should match your panel prefix: ptlc_ (Pterodactyl), plcn_/pacc_ (Pelican) or c7sp_ (Calagopus, uses the same Pterodactyl-compatible client API with Bearer auth).
   # You can find the client api key in the "API Credentials" tab of the "Account" page.
   apiKey: "ptlc_000000000000000000000000000000000000000000"
 
