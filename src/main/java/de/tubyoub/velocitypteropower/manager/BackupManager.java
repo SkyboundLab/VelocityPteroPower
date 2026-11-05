@@ -55,11 +55,16 @@ public class BackupManager {
      * START maps to {@link BackupEvent#SERVER_START}, STOP to {@link BackupEvent#SERVER_STOP}.
      */
     public void onPowerSignal(String serverName, PowerSignal signal) {
-        BackupEvent event = switch (signal) {
-            case START -> BackupEvent.SERVER_START;
-            case STOP -> BackupEvent.SERVER_STOP;
-            default -> null; // RESTART/KILL do not trigger backups
-        };
+        // Deliberately avoid an enum switch here: it would generate a synthetic
+        // BackupManager$1 switch-map class, one more entry that a broken/truncated
+        // plugin jar on the server would fail to load (NoClassDefFoundError).
+        BackupEvent event = null;
+        if (signal == PowerSignal.START) {
+            event = BackupEvent.SERVER_START;
+        } else if (signal == PowerSignal.STOP) {
+            event = BackupEvent.SERVER_STOP;
+        }
+        // RESTART/KILL do not trigger backups
         if (event != null) {
             triggerBackup(serverName, event);
         }
