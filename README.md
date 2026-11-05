@@ -27,7 +27,7 @@
 -   **Efficient & Safe**:
     -   Respects panel API rate limits (Pterodactyl/Pelican/Mc Server Soft).
     -   Handles forced host connections, redirecting players to a limbo server.
--   **Automatic Backups**: Create panel backups on configurable events (server start/stop, player join/leave), with per-server policies and exclusion patterns, automatically deleting the oldest backups to keep a configurable limit per server.
+-   **Automatic Backups**: Create panel backups on configurable events (server start/stop, player join/leave), with per-server policies, server/path exclusion patterns, and automatic deletion of the oldest backups to keep a configurable limit per server.
 -   **Update Notifications**: Stay informed about new plugin versions.
 -   **Configurable**:
     -   Fine-tune server startup/shutdown behavior.

@@ -86,7 +86,8 @@ public class ConfigurationManager {
     private int backupMinIntervalSeconds = 60;
     private boolean pruneBackupsBeforeCreate;
     private String backupNamePrefix = "vpp-auto";
-    private List<String> backupExcludePatterns = Collections.emptyList();
+    private List<String> backupExcludeServers = Collections.emptyList();
+    private List<String> backupExcludePaths = Collections.emptyList();
 
     // Lifecycle
     private List<String> shutdownOnProxyExitList;
@@ -197,7 +198,10 @@ public class ConfigurationManager {
                 backupMinIntervalSeconds = backups.getInt("minIntervalSeconds", 60);
                 pruneBackupsBeforeCreate = backups.getBoolean("pruneBeforeCreate", false);
                 backupNamePrefix = backups.getString("namePrefix", "vpp-auto");
-                backupExcludePatterns = backups.getStringList("excludeServers");
+                backupExcludeServers = backups.getStringList("excludeServers");
+                backupExcludePaths = backups.getStringList("excludePaths").stream()
+                        .filter(path -> path != null && !path.isBlank())
+                        .toList();
                 if (backups.contains("events")) {
                     backupEvents = parseBackupEvents(backups.getStringList("events"), "backups.events");
                 }
@@ -617,8 +621,13 @@ public class ConfigurationManager {
         return (backupNamePrefix == null || backupNamePrefix.isBlank()) ? "vpp-auto" : backupNamePrefix;
     }
 
-    public List<String> getBackupExcludePatterns() {
-        return backupExcludePatterns == null ? Collections.emptyList() : backupExcludePatterns;
+    public List<String> getBackupExcludeServers() {
+        return backupExcludeServers == null ? Collections.emptyList() : backupExcludeServers;
+    }
+
+    /** Glob paths excluded from automatic backup archives (Pterodactyl/Pelican 'ignored' field). */
+    public List<String> getBackupExcludePaths() {
+        return backupExcludePaths == null ? Collections.emptyList() : backupExcludePaths;
     }
 
     /**
@@ -629,9 +638,9 @@ public class ConfigurationManager {
      * @return true if the server is excluded from automatic backups
      */
     public boolean isBackupExcluded(String serverName) {
-        if (serverName == null || backupExcludePatterns == null) return false;
+        if (serverName == null || backupExcludeServers == null) return false;
         String name = serverName.toLowerCase(Locale.ROOT);
-        for (String pattern : backupExcludePatterns) {
+        for (String pattern : backupExcludeServers) {
             if (pattern == null || pattern.isBlank()) continue;
             if (globMatches(pattern.trim().toLowerCase(Locale.ROOT), name)) return true;
         }

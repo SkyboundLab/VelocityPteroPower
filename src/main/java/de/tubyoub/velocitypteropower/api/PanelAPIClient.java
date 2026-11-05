@@ -55,11 +55,12 @@ public interface PanelAPIClient {
      * Creates a backup of a server on the panel.
      * Default implementation reports "unsupported" (used by panels without a backup API, e.g. Mc Server Soft).
      *
-     * @param serverId   The unique identifier of the server on the panel.
-     * @param backupName The name for the new backup (may be null/blank to let the panel choose).
+     * @param serverId      The unique identifier of the server on the panel.
+     * @param backupName    The name for the new backup (may be null/blank to let the panel choose).
+     * @param excludedPaths Glob paths to exclude from the backup (may be empty).
      * @return A future that completes with {@code true} if the backup creation was accepted.
      */
-    default CompletableFuture<Boolean> createBackup(String serverId, String backupName) {
+    default CompletableFuture<Boolean> createBackup(String serverId, String backupName, List<String> excludedPaths) {
         return CompletableFuture.completedFuture(false);
     }
     /**

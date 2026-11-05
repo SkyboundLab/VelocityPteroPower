@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -197,11 +198,18 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
     /**
      * Creates a backup for a server using the Pterodactyl/Pelican client API.
      */
-    protected CompletableFuture<Boolean> createBackupRequest(String serverId, String backupName) {
+    protected CompletableFuture<Boolean> createBackupRequest(String serverId, String backupName, List<String> excludedPaths) {
         return CompletableFuture.supplyAsync(() -> {
             if (isBlank(serverId) || !canMakeRequest("backup creation", serverId)) return false;
             try {
-                String body = isBlank(backupName) ? "{}" : JSON.writeValueAsString(Map.of("name", backupName));
+                Map<String, Object> payload = new LinkedHashMap<>();
+                if (!isBlank(backupName)) {
+                    payload.put("name", backupName);
+                }
+                if (excludedPaths != null && !excludedPaths.isEmpty()) {
+                    payload.put("ignored", String.join("\n", excludedPaths));
+                }
+                String body = JSON.writeValueAsString(payload);
                 HttpRequest request = clientApiRequest(serverId, "/backups")
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body))

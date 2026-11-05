@@ -120,15 +120,16 @@ public class BackupManager {
             logger.debug("Triggering automatic backup '{}' for server '{}' ({}) due to event '{}'.",
                     backupName, serverName, serverId, event.getId());
 
+            List<String> excludedPaths = config.getBackupExcludePaths();
             CompletableFuture<Boolean> creation;
             if (config.isPruneBackupsBeforeCreate()) {
                 // Keep one slot free so the new backup fits within the limit
                 int keep = maxBackups > 0 ? maxBackups - 1 : -1;
                 creation = api.listBackups(serverId)
                         .thenCompose(backups -> pruneOldBackups(serverName, serverId, backups, keep))
-                        .thenCompose(ignored -> api.createBackup(serverId, backupName));
+                        .thenCompose(unused -> api.createBackup(serverId, backupName, excludedPaths));
             } else {
-                creation = api.createBackup(serverId, backupName);
+                creation = api.createBackup(serverId, backupName, excludedPaths);
             }
 
             creation.thenCompose(created -> {

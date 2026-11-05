@@ -210,6 +210,13 @@ backups:
   # default = []
   excludeServers: []
 
+  # Glob paths for files/directories that should not be included in automatic backups.
+  # Paths are relative to the server root. Supported by Pterodactyl/Pelican-compatible
+  # panels (passed as the backup API's 'ignored' field).
+  # Examples: "*.log", "logs/*", "cache/**", "world/session.lock"
+  # default = []
+  excludePaths: []
+
   # Per-server overrides live in the 'servers' section, e.g.:
   #   servers:
   #     survival:

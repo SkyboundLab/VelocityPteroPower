@@ -131,12 +131,13 @@ public class VelocityPteroPower {
             if (apiClient instanceof McServerSoftApiClient) {
                 filteredLogger.warn("Backups are enabled, but Mc Server Soft does not support the backup API. Backups will be skipped.");
             } else {
-                filteredLogger.info("Automatic backups ENABLED. Events: {} | max {} per server | min interval {}s | prefix '{}' | {} exclusion pattern(s).",
+                filteredLogger.info("Automatic backups ENABLED. Events: {} | max {} per server | min interval {}s | prefix '{}' | {} excluded server(s) | {} excluded path(s).",
                         configurationManager.getBackupEvents().stream().map(e -> e.getId()).toList(),
                         configurationManager.getMaxBackupsPerServer(),
                         configurationManager.getBackupMinIntervalSeconds(),
                         configurationManager.getBackupNamePrefix(),
-                        configurationManager.getBackupExcludePatterns().size());
+                        configurationManager.getBackupExcludeServers().size(),
+                        configurationManager.getBackupExcludePaths().size());
             }
         }
 

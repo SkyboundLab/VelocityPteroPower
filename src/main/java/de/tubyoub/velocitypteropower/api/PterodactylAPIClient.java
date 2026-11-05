@@ -508,8 +508,8 @@ public class PterodactylAPIClient extends AbstractPanelAPIClient {
     }
 
     @Override
-    public CompletableFuture<Boolean> createBackup(String serverId, String backupName) {
-        return createBackupRequest(serverId, backupName);
+    public CompletableFuture<Boolean> createBackup(String serverId, String backupName, List<String> excludedPaths) {
+        return createBackupRequest(serverId, backupName, excludedPaths);
     }
 
     @Override
