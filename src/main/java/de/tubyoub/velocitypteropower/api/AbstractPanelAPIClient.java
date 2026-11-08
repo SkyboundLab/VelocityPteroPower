@@ -35,7 +35,7 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
         }
     }
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    protected static final ObjectMapper JSON = new ObjectMapper();
 
     // per-server resource usage cache
     protected final java.util.concurrent.ConcurrentHashMap<String, CacheEntry> resourceCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -296,38 +296,38 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
         }, executorService);
     }
 
-    private HttpRequest.Builder clientApiRequest(String serverId, String path) {
+    protected HttpRequest.Builder clientApiRequest(String serverId, String path) {
         return HttpRequest.newBuilder()
                 .uri(URI.create(configurationManager.getPterodactylUrl() + "api/client/servers/" + serverId + path))
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + configurationManager.getPterodactylApiKey());
     }
 
-    private HttpResponse<String> send(HttpRequest request) throws Exception {
+    protected HttpResponse<String> send(HttpRequest request) throws Exception {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         rateLimitTracker.updateRateLimitInfo(response);
         return response;
     }
 
-    private boolean canMakeRequest(String action, String serverId) {
+    protected boolean canMakeRequest(String action, String serverId) {
         if (rateLimitTracker.canMakeRequest()) return true;
         logger.warn("Rate limit reached. Skipping {} for {}.", action, serverId);
         return false;
     }
 
-    private static boolean isSuccess(int statusCode) {
+    protected static boolean isSuccess(int statusCode) {
         return statusCode >= 200 && statusCode < 300;
     }
 
-    private static boolean isBlank(String value) {
+    protected static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
-    private static String abbreviate(String value) {
+    protected static String abbreviate(String value) {
         return value == null ? "null" : value.substring(0, Math.min(value.length(), 200));
     }
 
-    private static long parseTimestamp(String iso) {
+    protected static long parseTimestamp(String iso) {
         if (isBlank(iso)) return 0L;
         try {
             return OffsetDateTime.parse(iso).toInstant().toEpochMilli();

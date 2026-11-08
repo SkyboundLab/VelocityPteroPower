@@ -341,6 +341,8 @@ public class VelocityPteroPower {
         PanelType oldType =
                 (apiClient instanceof PelicanAPIClient)
                         ? PanelType.pelican
+                        : (apiClient instanceof CalagopusAPIClient)
+                        ? PanelType.calagopus
                         : (apiClient instanceof McServerSoftApiClient) ? PanelType.mcServerSoft : PanelType.pterodactyl;
         PanelType newType = configurationManager.getPanelType();
         String oldKey = configurationManager.getPterodactylApiKey();
@@ -380,6 +382,10 @@ public class VelocityPteroPower {
             case pelican -> {
                 filteredLogger.debug("Detected Pelican Panel, creating api client...");
                 this.apiClient = new PelicanAPIClient(this);
+            }
+            case calagopus -> {
+                filteredLogger.debug("Detected Calagopus Panel, creating api client...");
+                this.apiClient = new CalagopusAPIClient(this);
             }
             case mcServerSoft -> {
                 filteredLogger.debug("Detected Mc Server Soft Panel, creating api client...");

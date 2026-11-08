@@ -469,9 +469,10 @@ public class ConfigurationManager {
                 yield PanelType.pterodactyl;
             }
             case "c7sp" -> {
-                // Calagopus uses the Pterodactyl-compatible client API (/api/client/... with Bearer auth)
-                logger.debug("Detected Calagopus panel from apiKey (Pterodactyl-compatible API)");
-                yield PanelType.pterodactyl;
+                // Calagopus uses the Pterodactyl-compatible client API (/api/client/... with Bearer auth),
+                // but its backup endpoints differ (see CalagopusAPIClient), so it gets its own panel type.
+                logger.debug("Detected Calagopus panel from apiKey");
+                yield PanelType.calagopus;
             }
             case "plcn", "pacc"-> {
                 logger.debug("Detected pelican panel from apiKey");
