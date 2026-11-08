@@ -84,6 +84,18 @@ public class PteroCommand implements SimpleCommand {
                 }
                 break;
 
+            case "backup":
+                if (configurationManager.getPanelType() == PanelType.mcServerSoft) {
+                    sender.sendMessage(messages.prefixed(MessageKey.COMMAND_MCSS_NOT_SUPPORTED));
+                    break;
+                }
+                if (sender.hasPermission("ptero.backup")) {
+                    backupServer(sender, args);
+                } else {
+                    sender.sendMessage(messages.prefixed(MessageKey.COMMAND_NO_PERMISSION));
+                }
+                break;
+
             case "stopidle":
                 if (sender.hasPermission("ptero.stopIdle")) {
                     stopIdleServers(sender);
@@ -407,6 +419,40 @@ public class PteroCommand implements SimpleCommand {
     private void reloadConfig(CommandSource sender) {
         plugin.reload();
         sender.sendMessage(messages.prefixed(MessageKey.GENERIC_RELOAD_SUCCESS));
+    }
+
+    /**
+     * Manually triggers a backup of one managed server ({@code /ptero backup <server>}).
+     * The backup is created asynchronously, so the reply only confirms it was
+     * started (or why it was skipped); the result is logged like any other backup.
+     */
+    private void backupServer(CommandSource sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(
+                    messages.prefixed(
+                            MessageKey.COMMAND_USAGE, "usage", "ptero backup <serverName>"));
+            return;
+        }
+        String serverName = args[1];
+        Map<String, PteroServerInfo> serverInfoMap = plugin.getServerInfoMap();
+        if (serverInfoMap == null || !serverInfoMap.containsKey(serverName)) {
+            sender.sendMessage(
+                    messages.prefixed(
+                            MessageKey.CONNECT_UNMANAGED_SERVER, "server", serverName));
+            return;
+        }
+        boolean started = plugin.getBackupManager().triggerManualBackup(serverName);
+        if (started) {
+            sender.sendMessage(
+                    messages.prefixed(
+                            MessageKey.GENERIC_SUCCESS, "message",
+                            "Backup started for server '" + serverName + "' (see the log for the result)."));
+        } else {
+            sender.sendMessage(
+                    messages.prefixed(
+                            MessageKey.GENERIC_ERROR, "message",
+                            "Backup for server '" + serverName + "' was skipped (excluded, disabled for this server, or another backup is already running)."));
+        }
     }
 
     private void showHistory(CommandSource sender, String[] args) {
@@ -820,6 +866,7 @@ public class PteroCommand implements SimpleCommand {
             if (sender.hasPermission("ptero.start")) subs.add("start");
             if (sender.hasPermission("ptero.stop")) subs.add("stop");
             if (sender.hasPermission("ptero.restart")) subs.add("restart");
+            if (sender.hasPermission("ptero.backup")) subs.add("backup");
             if (sender.hasPermission("ptero.list")) subs.add("list");
             if (sender.hasPermission("ptero.info")) subs.add("info");
             if (sender.hasPermission("ptero.info")) subs.add("apithreads");
@@ -838,11 +885,12 @@ public class PteroCommand implements SimpleCommand {
         // Second argument suggestions (server names)
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);
-            boolean needsServer = sub.equals("start") || sub.equals("stop") || sub.equals("restart") || sub.equals("info");
+            boolean needsServer = sub.equals("start") || sub.equals("stop") || sub.equals("restart") || sub.equals("backup") || sub.equals("info");
             if (needsServer) {
                 if ((sub.equals("start") && !sender.hasPermission("ptero.start"))
                         || (sub.equals("stop") && !sender.hasPermission("ptero.stop"))
                         || (sub.equals("restart") && !sender.hasPermission("ptero.restart"))
+                        || (sub.equals("backup") && !sender.hasPermission("ptero.backup"))
                         || (sub.equals("info") && !sender.hasPermission("ptero.info"))) {
                     return java.util.Collections.emptyList();
                 }
@@ -878,6 +926,7 @@ public class PteroCommand implements SimpleCommand {
         sender.sendMessage(Component.text("/ptero start <serverName>"));
         sender.sendMessage(Component.text("/ptero stop <serverName>"));
         sender.sendMessage(Component.text("/ptero restart <serverName>"));
+        sender.sendMessage(Component.text("/ptero backup <serverName>"));
         sender.sendMessage(Component.text("/ptero list"));
         sender.sendMessage(Component.text("/ptero info <serverName>"));
         sender.sendMessage(Component.text("/ptero apithreads"));

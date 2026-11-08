@@ -38,6 +38,7 @@
 -   `/ptero start <serverName>`
 -   `/ptero stop <serverName>`
 -   `/ptero restart <serverName>`
+-   `/ptero backup <serverName>`
 -   `/ptero list`
 -   `/ptero info <serverName>`
 -   `/ptero apithreads`
@@ -51,6 +52,7 @@
 -   `ptero.start`
 -   `ptero.stop`
 -   `ptero.restart`
+-   `ptero.backup`
 -   `ptero.list`
 -   `ptero.info`
 -   `ptero.whitelistReload`

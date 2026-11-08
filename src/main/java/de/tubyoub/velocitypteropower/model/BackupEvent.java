@@ -17,7 +17,9 @@ public enum BackupEvent {
     NETWORK_JOIN("network_join"),
     NETWORK_LEAVE("network_leave"),
     /** Fired by the cron scheduler (backups.schedule), not by a game event. */
-    SCHEDULED("scheduled");
+    SCHEDULED("scheduled"),
+    /** Fired by an admin running /ptero backup. */
+    MANUAL("manual");
 
     private final String id;
 

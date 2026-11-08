@@ -157,6 +157,9 @@ moveHistory:
 
 # Automatic panel backups
 # When enabled, VPP creates a backup on the panel whenever one of the configured events occurs.
+# A backup can also be triggered manually at any time with '/ptero backup <server>'
+# (permission 'ptero.backup'); manual backups use the same naming, retention and
+# exclusions as automatic ones, and run even when event-based backups are disabled.
 # The oldest automatic backups of that server are deleted on the panel so that at most
 # 'maxBackupsPerServer' remain (see 'pruneBeforeCreate' for when this happens).
 # Only backups whose name starts with 'namePrefix' are counted and deleted - manually

@@ -74,9 +74,24 @@ public class BackupManager {
      * Triggers the backup a cron schedule resolved for this server, if any.
      * Equivalent to {@link #triggerBackup(String, BackupEvent)} with
      * {@link BackupEvent#SCHEDULED}.
+     *
+     * @return true if a backup was started, false if it was skipped
      */
-    public void triggerScheduledBackup(String serverName) {
-        triggerBackup(serverName, BackupEvent.SCHEDULED);
+    public boolean triggerScheduledBackup(String serverName) {
+        return triggerBackup(serverName, BackupEvent.SCHEDULED);
+    }
+
+    /**
+     * Triggers a backup for a server because an admin ran {@code /ptero backup}.
+     * Equivalent to {@link #triggerBackup(String, BackupEvent)} with
+     * {@link BackupEvent#MANUAL}. A manual backup is an explicit admin action,
+     * so it runs even when event-based backups are disabled — but a per-server
+     * {@code backups.enabled: false} or an exclusion still opts the server out.
+     *
+     * @return true if a backup was started, false if it was skipped
+     */
+    public boolean triggerManualBackup(String serverName) {
+        return triggerBackup(serverName, BackupEvent.MANUAL);
     }
 
     /**
@@ -87,24 +102,32 @@ public class BackupManager {
      * <p>A {@link BackupEvent#SCHEDULED} trigger comes from the cron scheduler
      * ({@code backups.schedule}), so it is not gated on the {@code backups.events}
      * list and not throttled by {@code minIntervalSeconds} — the cron expression
-     * itself is the schedule. It still respects the enabled flag, the server
-     * exclusions, retention and the in-flight guard, and an enabled schedule
-     * is enough to allow it even when the event-based {@code backups.enabled}
-     * is off (a per-server {@code backups.enabled: false} still opts out).
+     * itself is the schedule. The same applies to a {@link BackupEvent#MANUAL}
+     * trigger from {@code /ptero backup}: an admin explicitly asked for it.
+     * Both still respect the enabled flag, the server exclusions, retention
+     * and the in-flight guard, and an enabled schedule is enough to allow a
+     * scheduled backup even when the event-based {@code backups.enabled} is
+     * off (a per-server {@code backups.enabled: false} still opts out). A
+     * manual backup needs no enabled backup system at all — only a per-server
+     * opt-out stops it.
+     *
+     * @return true if a backup was started, false if it was skipped
      */
-    public void triggerBackup(String serverName, BackupEvent event) {
+    public boolean triggerBackup(String serverName, BackupEvent event) {
         String trackedServerId = null;
         try {
-            if (event == null || serverName == null) return;
+            if (event == null || serverName == null) return false;
             boolean scheduled = event == BackupEvent.SCHEDULED;
+            boolean manual = event == BackupEvent.MANUAL;
+            boolean explicit = scheduled || manual;
             if (config.isBackupExcluded(serverName)) {
                 logger.debug("Backup for '{}' skipped: server matches a backups.excludeServers pattern.", serverName);
-                return;
+                return false;
             }
 
             var infoMap = plugin.getServerInfoMap();
             PteroServerInfo info = infoMap == null ? null : infoMap.get(serverName);
-            if (info == null || info.getServerId() == null || info.getServerId().isBlank()) return;
+            if (info == null || info.getServerId() == null || info.getServerId().isBlank()) return false;
             final String serverId = info.getServerId();
             trackedServerId = serverId;
 
@@ -113,6 +136,8 @@ public class BackupManager {
             boolean enabled;
             if (policy != null && policy.enabled() != null) {
                 enabled = policy.enabled();
+            } else if (manual) {
+                enabled = true;
             } else if (scheduled) {
                 enabled = config.isBackupsEnabled() || config.isBackupScheduleEnabled()
                         || (policy != null && policy.schedule() != null
@@ -120,13 +145,13 @@ public class BackupManager {
             } else {
                 enabled = config.isBackupsEnabled();
             }
-            if (!enabled) return;
+            if (!enabled) return false;
 
             int maxBackups = inherit(policy != null ? policy.maxBackups() : null, config.getMaxBackupsPerServer());
 
-            if (!scheduled) {
+            if (!explicit) {
                 Set<BackupEvent> events = inherit(policy != null ? policy.events() : null, config.getBackupEvents());
-                if (!events.contains(event)) return;
+                if (!events.contains(event)) return false;
 
                 int minInterval = inherit(policy != null ? policy.minIntervalSeconds() : null, config.getBackupMinIntervalSeconds());
                 long now = System.currentTimeMillis();
@@ -134,21 +159,21 @@ public class BackupManager {
                 if (minInterval > 0 && last != null && now - last < minInterval * 1000L) {
                     logger.debug("Backup for '{}' ({}) skipped: min interval of {}s not reached yet (event: {}).",
                             serverName, serverId, minInterval, event.getId());
-                    return;
+                    return false;
                 }
             }
             long now = System.currentTimeMillis();
             if (!inFlight.add(serverId)) {
                 logger.debug("Backup for '{}' ({}) skipped: another backup is already in progress (event: {}).",
                         serverName, serverId, event.getId());
-                return;
+                return false;
             }
             lastBackupAt.put(serverId, now);
 
             PanelAPIClient api = plugin.getApiClient();
             if (api == null) {
                 inFlight.remove(serverId);
-                return;
+                return false;
             }
 
             String backupName = buildBackupName(serverName, event);
@@ -184,11 +209,13 @@ public class BackupManager {
                             "reason", String.valueOf(cause.getMessage() != null ? cause.getMessage() : cause))));
                 }
             });
+            return true;
         } catch (Exception ex) {
             if (trackedServerId != null) {
                 inFlight.remove(trackedServerId);
             }
             logger.warn("Backup trigger for '{}' failed: {}", serverName, ex.toString());
+            return false;
         }
     }
 
