@@ -71,14 +71,32 @@ public class BackupManager {
     }
 
     /**
+     * Triggers the backup a cron schedule resolved for this server, if any.
+     * Equivalent to {@link #triggerBackup(String, BackupEvent)} with
+     * {@link BackupEvent#SCHEDULED}.
+     */
+    public void triggerScheduledBackup(String serverName) {
+        triggerBackup(serverName, BackupEvent.SCHEDULED);
+    }
+
+    /**
      * Triggers an automatic backup for the given server if the event is enabled in the config.
      * The backup is created asynchronously; afterwards old automatic backups are pruned
      * so that at most 'maxBackupsPerServer' remain.
+     *
+     * <p>A {@link BackupEvent#SCHEDULED} trigger comes from the cron scheduler
+     * ({@code backups.schedule}), so it is not gated on the {@code backups.events}
+     * list and not throttled by {@code minIntervalSeconds} — the cron expression
+     * itself is the schedule. It still respects the enabled flag, the server
+     * exclusions, retention and the in-flight guard, and an enabled schedule
+     * is enough to allow it even when the event-based {@code backups.enabled}
+     * is off (a per-server {@code backups.enabled: false} still opts out).
      */
     public void triggerBackup(String serverName, BackupEvent event) {
         String trackedServerId = null;
         try {
             if (event == null || serverName == null) return;
+            boolean scheduled = event == BackupEvent.SCHEDULED;
             if (config.isBackupExcluded(serverName)) {
                 logger.debug("Backup for '{}' skipped: server matches a backups.excludeServers pattern.", serverName);
                 return;
@@ -92,22 +110,34 @@ public class BackupManager {
 
             // Per-server settings override the global 'backups' config
             BackupPolicy policy = info.getBackupPolicy();
-            boolean enabled = inherit(policy != null ? policy.enabled() : null, config.isBackupsEnabled());
+            boolean enabled;
+            if (policy != null && policy.enabled() != null) {
+                enabled = policy.enabled();
+            } else if (scheduled) {
+                enabled = config.isBackupsEnabled() || config.isBackupScheduleEnabled()
+                        || (policy != null && policy.schedule() != null
+                                && Boolean.TRUE.equals(policy.schedule().enabled()));
+            } else {
+                enabled = config.isBackupsEnabled();
+            }
             if (!enabled) return;
 
-            Set<BackupEvent> events = inherit(policy != null ? policy.events() : null, config.getBackupEvents());
-            if (!events.contains(event)) return;
-
-            int minInterval = inherit(policy != null ? policy.minIntervalSeconds() : null, config.getBackupMinIntervalSeconds());
             int maxBackups = inherit(policy != null ? policy.maxBackups() : null, config.getMaxBackupsPerServer());
 
-            long now = System.currentTimeMillis();
-            Long last = lastBackupAt.get(serverId);
-            if (minInterval > 0 && last != null && now - last < minInterval * 1000L) {
-                logger.debug("Backup for '{}' ({}) skipped: min interval of {}s not reached yet (event: {}).",
-                        serverName, serverId, minInterval, event.getId());
-                return;
+            if (!scheduled) {
+                Set<BackupEvent> events = inherit(policy != null ? policy.events() : null, config.getBackupEvents());
+                if (!events.contains(event)) return;
+
+                int minInterval = inherit(policy != null ? policy.minIntervalSeconds() : null, config.getBackupMinIntervalSeconds());
+                long now = System.currentTimeMillis();
+                Long last = lastBackupAt.get(serverId);
+                if (minInterval > 0 && last != null && now - last < minInterval * 1000L) {
+                    logger.debug("Backup for '{}' ({}) skipped: min interval of {}s not reached yet (event: {}).",
+                            serverName, serverId, minInterval, event.getId());
+                    return;
+                }
             }
+            long now = System.currentTimeMillis();
             if (!inFlight.add(serverId)) {
                 logger.debug("Backup for '{}' ({}) skipped: another backup is already in progress (event: {}).",
                         serverName, serverId, event.getId());

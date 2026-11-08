@@ -4,7 +4,7 @@
 ################################
 
 # Version of the configuration file
-fileversion: 15
+fileversion: 16
 
 # Check for updates
 # If true, the plugin will check for updates on startup.
@@ -203,6 +203,41 @@ backups:
   # default = vpp-auto
   namePrefix: "vpp-auto"
 
+  # Scheduled backups (cron job)
+  # When enabled, VPP backs up the servers below on a cron schedule, on top of
+  # (or instead of) the event-based backups above. The server does NOT need to
+  # be online — the panel backs up the files on disk.
+  # A scheduled backup ignores 'events' and 'minIntervalSeconds' (the cron
+  # expression IS the interval), but still respects 'enabled' per server,
+  # 'excludeServers', 'maxBackupsPerServer', 'pruneBeforeCreate', 'namePrefix'
+  # and 'excludePaths'. Enabling a schedule is enough to allow scheduled
+  # backups even when 'backups.enabled' is false; a per-server
+  # 'backups.enabled: false' still opts that server out.
+  # Cron format: 5 fields, "minute hour day-of-month month day-of-week".
+  #   "0 3 * * *"    every day at 03:00
+  #   "0 */6 * * *"  every 6 hours (00:00, 06:00, 12:00, 18:00)
+  #   "30 2 * * 0"   every Sunday at 02:30
+  #   "0 4 1 * *"    on the 1st of every month at 04:00
+  # Lists, ranges and steps are supported ("0,30 * * * *", "9-17 * * * 1-5",
+  # "*/15 * * * *"), as are month/day names ("0 3 * * MON", "0 3 * JAN *").
+  # A minute missed while the proxy was down is skipped, never backfilled.
+  schedule:
+    # default = false
+    enabled: false
+
+    # default = "0 3 * * *" (daily at 03:00)
+    cron: "0 3 * * *"
+
+    # Timezone the cron times are read in. Any IANA zone id, e.g. "Europe/Berlin",
+    # "America/Toronto", or "UTC".
+    # default = "UTC"
+    timezone: "UTC"
+
+    # Which servers the global schedule backs up. Empty = every managed server
+    # (still respecting per-server overrides and 'excludeServers' below).
+    # default = []
+    servers: []
+
   # Exclusion patterns: servers whose name matches any of these (glob, case-insensitive;
   # '*' matches any sequence of characters, '?' a single one) NEVER get automatic backups,
   # regardless of global or per-server backup settings.
@@ -226,6 +261,10 @@ backups:
   #         events: [server_stop]  # override the global event list
   #         maxBackups: 3          # override the global retention limit (0 = unlimited)
   #         minIntervalSeconds: 60 # override the global min interval
+  #         schedule:              # override the global cron schedule for this server only
+  #           enabled: true        # false = no scheduled backups for this server, even if the global schedule is on
+  #           cron: "0 2 * * *"    # unset = inherit the global cron
+  #           timezone: "Europe/Berlin" # unset = inherit the global timezone
 
 # Lifecycle related behavior
 lifecycle:
@@ -355,3 +394,7 @@ servers:
     #     - server_stop
     #   maxBackups: 3            # 0 = unlimited
     #   minIntervalSeconds: 60
+    #   schedule:                # cron schedule just for this server (see 'backups.schedule' above)
+    #     enabled: true
+    #     cron: "0 2 * * *"
+    #     timezone: "Europe/Berlin"

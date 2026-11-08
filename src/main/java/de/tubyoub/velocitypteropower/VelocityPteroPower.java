@@ -58,6 +58,7 @@ public class VelocityPteroPower {
     private MessagesManager messagesManager;
     private WhitelistManager whitelistManager;
     private BackupManager backupManager;
+    private de.tubyoub.velocitypteropower.service.BackupSchedulerService backupSchedulerService;
     private PanelAPIClient apiClient;
     private RateLimitTracker rateLimitTracker;
     private UpdateService updateService;
@@ -140,6 +141,11 @@ public class VelocityPteroPower {
                         configurationManager.getBackupExcludePaths().size());
             }
         }
+
+        // Cron-scheduled backups (backups.schedule). Reads the live config on
+        // every tick, so /ptero reload applies a changed schedule without restart.
+        this.backupSchedulerService = new de.tubyoub.velocitypteropower.service.BackupSchedulerService(this);
+        this.backupSchedulerService.start();
 
         this.serverLifecycleManager = new ServerLifecycleManager(proxyServer, this);
         this.playerConnectionHandler = new PlayerConnectionHandler(proxyServer, this);
@@ -306,6 +312,9 @@ public class VelocityPteroPower {
         } catch (Exception ex) {
             filteredLogger.warn("Error during shutdown stop sequence: {}", ex.toString());
         } finally {
+            if (backupSchedulerService != null) {
+                backupSchedulerService.stop();
+            }
             if (apiClient != null) {
                 apiClient.shutdown();
             }
@@ -320,6 +329,12 @@ public class VelocityPteroPower {
         this.updateLoggerLevel();
         messagesManager.loadMessages();
         whitelistManager.initialize();
+
+        // The backup scheduler reads the live config on every tick, so a
+        // changed cron schedule already applies — just log what is active now.
+        if (backupSchedulerService != null) {
+            backupSchedulerService.logScheduleSummary();
+        }
 
         this.serverInfoMap = configurationManager.getServerInfoMap();
 
@@ -457,6 +472,10 @@ public class VelocityPteroPower {
 
     public BackupManager getBackupManager() {
         return backupManager;
+    }
+
+    public de.tubyoub.velocitypteropower.service.BackupSchedulerService getBackupSchedulerService() {
+        return backupSchedulerService;
     }
 
     public PanelAPIClient getApiClient() {

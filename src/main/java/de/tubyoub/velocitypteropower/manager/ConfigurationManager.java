@@ -5,7 +5,9 @@ package de.tubyoub.velocitypteropower.manager;
 
 import de.tubyoub.velocitypteropower.model.BackupEvent;
 import de.tubyoub.velocitypteropower.model.BackupPolicy;
+import de.tubyoub.velocitypteropower.model.BackupSchedule;
 import de.tubyoub.velocitypteropower.model.PteroServerInfo;
+import de.tubyoub.velocitypteropower.util.CronExpression;
 import de.tubyoub.velocitypteropower.VelocityPteroPower;
 import de.tubyoub.velocitypteropower.api.PanelType;
 import dev.dejvokep.boostedyaml.YamlDocument;
@@ -23,6 +25,7 @@ import org.slf4j.event.Level;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.*;
 
 /**
@@ -88,6 +91,7 @@ public class ConfigurationManager {
     private String backupNamePrefix = "vpp-auto";
     private List<String> backupExcludeServers = Collections.emptyList();
     private List<String> backupExcludePaths = Collections.emptyList();
+    private BackupSchedule backupSchedule;
 
     // Lifecycle
     private List<String> shutdownOnProxyExitList;
@@ -151,6 +155,7 @@ public class ConfigurationManager {
                                         .addIgnoredRoute("13", "servers", '.')
                                         .addIgnoredRoute("14", "servers", '.')
                                         .addIgnoredRoute("15", "servers", '.')
+                                        .addIgnoredRoute("16", "servers", '.')
                                         .build());
 
 
@@ -205,6 +210,7 @@ public class ConfigurationManager {
                 if (backups.contains("events")) {
                     backupEvents = parseBackupEvents(backups.getStringList("events"), "backups.events");
                 }
+                backupSchedule = parseBackupSchedule(backups.getSection("schedule"), "backups.schedule", true);
             }
 
             // Lifecycle section
@@ -394,7 +400,47 @@ public class ConfigurationManager {
                         .map(events -> parseBackupEvents(events, "servers." + serverKey + ".backups.events"))
                         .orElse(null),
                 section.getOptionalInt("maxBackups").orElse(null),
-                section.getOptionalInt("minIntervalSeconds").orElse(null));
+                section.getOptionalInt("minIntervalSeconds").orElse(null),
+                parseBackupSchedule(section.getSection("schedule"), "servers." + serverKey + ".backups.schedule", false));
+    }
+
+    /**
+     * Parses an optional 'schedule' section (global or per-server) into a {@link BackupSchedule}.
+     * Returns null when there is no schedule section. An enabled schedule with an invalid
+     * cron expression or timezone is logged and returned disabled, so a typo can never
+     * silently schedule backups at the wrong time — or crash config loading.
+     *
+     * @param section the schedule section, or null
+     * @param configPath the config path, for log messages
+     * @param global whether this is the global schedule (only it has a 'servers' list)
+     * @return the parsed schedule, or null if there is no schedule section
+     */
+    private BackupSchedule parseBackupSchedule(Section section, String configPath, boolean global) {
+        if (section == null) return null;
+        Boolean enabled = section.getOptionalBoolean("enabled").orElse(null);
+        String cron = section.contains("cron") ? section.getString("cron") : null;
+        String timezone = section.contains("timezone") ? section.getString("timezone") : null;
+        List<String> servers = global ? section.getStringList("servers") : null;
+        if (Boolean.TRUE.equals(enabled)) {
+            try {
+                if (cron == null || cron.isBlank()) {
+                    throw new IllegalArgumentException("no cron expression set");
+                }
+                CronExpression.parse(cron);
+            } catch (IllegalArgumentException ex) {
+                logger.error("Invalid cron expression '{}' in '{}': {} — scheduled backups disabled for it.",
+                        cron, configPath, ex.getMessage());
+                return new BackupSchedule(false, cron, timezone, servers);
+            }
+            try {
+                ZoneId.of(timezone != null && !timezone.isBlank() ? timezone.trim() : "UTC");
+            } catch (Exception ex) {
+                logger.error("Invalid timezone '{}' in '{}': {} — scheduled backups disabled for it.",
+                        timezone, configPath, ex.getMessage());
+                return new BackupSchedule(false, cron, timezone, servers);
+            }
+        }
+        return new BackupSchedule(enabled, cron, timezone, servers);
     }
 
     private Set<BackupEvent> parseBackupEvents(List<String> rawEvents, String configPath) {
@@ -603,6 +649,14 @@ public class ConfigurationManager {
     public int getMoveHistoryMaxEntries() { return Math.max(1, moveHistoryMaxEntries); }
 
     public boolean isBackupsEnabled() { return backupsEnabled; }
+
+    /** The global cron schedule for automatic backups, or null if none is configured. */
+    public BackupSchedule getBackupSchedule() { return backupSchedule; }
+
+    /** Whether any global cron schedule is enabled (per-server schedules are checked separately). */
+    public boolean isBackupScheduleEnabled() {
+        return backupSchedule != null && Boolean.TRUE.equals(backupSchedule.enabled());
+    }
 
     public Set<BackupEvent> getBackupEvents() {
         return backupEvents == null ? Collections.emptySet() : backupEvents;

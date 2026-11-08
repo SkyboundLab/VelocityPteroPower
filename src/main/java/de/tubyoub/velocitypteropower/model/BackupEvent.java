@@ -15,7 +15,9 @@ public enum BackupEvent {
     SERVER_JOIN("server_join"),
     SERVER_LEAVE("server_leave"),
     NETWORK_JOIN("network_join"),
-    NETWORK_LEAVE("network_leave");
+    NETWORK_LEAVE("network_leave"),
+    /** Fired by the cron scheduler (backups.schedule), not by a game event. */
+    SCHEDULED("scheduled");
 
     private final String id;
 

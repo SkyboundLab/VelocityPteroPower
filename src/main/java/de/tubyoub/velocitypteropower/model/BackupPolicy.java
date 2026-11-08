@@ -7,11 +7,12 @@ import java.util.Set;
 
 /**
  * Per-server backup policy. A {@code null} field inherits the corresponding
- * value from the global 'backups' section of the config.
+ * value from the global 'backups' config.
  */
 public record BackupPolicy(
         Boolean enabled,
         Set<BackupEvent> events,
         Integer maxBackups,
-        Integer minIntervalSeconds) {
+        Integer minIntervalSeconds,
+        BackupSchedule schedule) {
 }
