@@ -126,7 +126,6 @@ public class VelocityPteroPower {
             filteredLogger.warn("Mc Server Soft does not support whitelist fetching... disabling whitelist checking...");
         }
 
-        // Initialize automatic backup system
         this.backupManager = new BackupManager(this);
         if (configurationManager.isBackupsEnabled()) {
             if (apiClient instanceof McServerSoftApiClient) {
@@ -142,8 +141,7 @@ public class VelocityPteroPower {
             }
         }
 
-        // Cron-scheduled backups (backups.schedule). Reads the live config on
-        // every tick, so /ptero reload applies a changed schedule without restart.
+        // Scheduler reads the live config each tick, so /ptero reload applies schedule changes without restart
         this.backupSchedulerService = new de.tubyoub.velocitypteropower.service.BackupSchedulerService(this);
         this.backupSchedulerService.start();
 
@@ -159,7 +157,7 @@ public class VelocityPteroPower {
         this.proxyServer.getScheduler().buildTask(this, () -> {
             try { if (limboTrackerService != null) limboTrackerService.sweepNow(); } catch (Exception ignored) {}
         }).delay(Math.max(10, configurationManager.getIdleShutdownCheckInterval()), java.util.concurrent.TimeUnit.SECONDS).schedule();
-        
+
         // Initialize move history (optional, in-memory only)
         if (configurationManager.isMoveHistoryEnabled()) {
             this.moveHistoryService = new de.tubyoub.velocitypteropower.service.MoveHistoryService(this, configurationManager.getMoveHistoryMaxEntries());
@@ -167,7 +165,7 @@ public class VelocityPteroPower {
         } else {
             this.moveHistoryService = null;
         }
-        
+
         // Schedule periodic enforcement of always-online servers
         this.serverLifecycleManager.scheduleAlwaysOnlineMaintenance();
         // Trigger an immediate always-online enforcement once at startup
@@ -330,8 +328,6 @@ public class VelocityPteroPower {
         messagesManager.loadMessages();
         whitelistManager.initialize();
 
-        // The backup scheduler reads the live config on every tick, so a
-        // changed cron schedule already applies — just log what is active now.
         if (backupSchedulerService != null) {
             backupSchedulerService.logScheduleSummary();
         }
@@ -409,14 +405,6 @@ public class VelocityPteroPower {
         }
     }
 
-    /**
-     * Sends a power signal to a server and notifies the backup system, so it can
-     * trigger an automatic backup if the corresponding event is enabled.
-     *
-     * @param serverName Velocity name of the server
-     * @param serverId   Panel id of the server
-     * @param signal     The power signal to send
-     */
     public void powerServer(String serverName, String serverId, PowerSignal signal) {
         apiClient.powerServer(serverId, signal);
         if (backupManager != null) {

@@ -11,21 +11,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * A small dependency-free parser for standard 5-field cron expressions:
- * {@code minute hour day-of-month month day-of-week}.
- *
- * <p>Supported per field: {@code *}, lists ({@code 1,15}), ranges
- * ({@code 9-17}), steps ({@code *}{@code /15}, {@code 0-30/10}) and month /
- * day-of-week names ({@code JAN-DEC}, {@code SUN-SAT}; {@code 7} is Sunday,
- * like {@code 0}). Day-of-month and day-of-week follow the usual Vixie cron
- * rule: when both fields are restricted (not {@code *}), a time matches when
- * <em>either</em> matches; when only one is restricted, only that one decides.
- *
- * <p>No seconds field, no {@code L}/{@code W}/{@code #} specials, no
- * {@code @daily} shortcuts — keep the config format to the 5-field form
- * documented in {@code config.yml}.
- */
 public final class CronExpression {
 
     private static final Map<String, Integer> MONTH_NAMES = new HashMap<>();
@@ -60,14 +45,6 @@ public final class CronExpression {
         this.dayOfWeekRestricted = dayOfWeekRestricted;
     }
 
-    /**
-     * Parses a 5-field cron expression.
-     *
-     * @param expression the raw config value, e.g. {@code "0 3 * * *"}
-     * @return the parsed expression
-     * @throws IllegalArgumentException if the expression is blank, has the wrong
-     *         number of fields, or contains an out-of-range value
-     */
     public static CronExpression parse(String expression) {
         if (expression == null || expression.isBlank()) {
             throw new IllegalArgumentException("cron expression is blank");
@@ -90,13 +67,11 @@ public final class CronExpression {
                 isRestricted(fields[4]));
     }
 
-    /** Returns true if the given moment (already in the schedule's timezone) matches this expression. */
     public boolean matches(ZonedDateTime time) {
         if (!minutes.contains(time.getMinute())) return false;
         if (!hours.contains(time.getHour())) return false;
         if (!months.contains(time.getMonthValue())) return false;
         boolean domMatches = daysOfMonth.contains(time.getDayOfMonth());
-        // DayOfWeek: MONDAY=1 .. SUNDAY=7 -> cron 0=Sunday
         boolean dowMatches = daysOfWeek.contains(time.getDayOfWeek().getValue() % 7);
         if (dayOfMonthRestricted && dayOfWeekRestricted) {
             if (!domMatches && !dowMatches) return false;
@@ -108,11 +83,6 @@ public final class CronExpression {
         return true;
     }
 
-    /**
-     * Finds the next run strictly after {@code from}, or {@code null} if there
-     * is none within the next 4 years (e.g. a Feb 29 schedule in a non-leap
-     * stretch is still found, since the search covers leap years).
-     */
     public ZonedDateTime nextAfter(ZonedDateTime from) {
         ZonedDateTime candidate = from.truncatedTo(ChronoUnit.MINUTES).plusMinutes(1);
         ZonedDateTime limit = candidate.plusYears(4);
@@ -172,7 +142,6 @@ public final class CronExpression {
                 rangeMax = rangeMin;
             }
             for (int value = rangeMin; value <= rangeMax; value += step) {
-                // Day-of-week 7 is Sunday, same as 0.
                 values.add(max == 7 && value == 7 ? 0 : value);
             }
         }

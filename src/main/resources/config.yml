@@ -209,7 +209,7 @@ backups:
   # Scheduled backups (cron job)
   # When enabled, VPP backs up the servers below on a cron schedule, on top of
   # (or instead of) the event-based backups above. The server does NOT need to
-  # be online — the panel backs up the files on disk.
+  # be online - the panel backs up the files on disk.
   # A scheduled backup ignores 'events' and 'minIntervalSeconds' (the cron
   # expression IS the interval), but still respects 'enabled' per server,
   # 'excludeServers', 'maxBackupsPerServer', 'pruneBeforeCreate', 'namePrefix'

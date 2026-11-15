@@ -421,11 +421,6 @@ public class PteroCommand implements SimpleCommand {
         sender.sendMessage(messages.prefixed(MessageKey.GENERIC_RELOAD_SUCCESS));
     }
 
-    /**
-     * Manually triggers a backup of one managed server ({@code /ptero backup <server>}).
-     * The backup is created asynchronously, so the reply only confirms it was
-     * started (or why it was skipped); the result is logged like any other backup.
-     */
     private void backupServer(CommandSource sender, String[] args) {
         if (args.length < 2) {
             sender.sendMessage(

@@ -195,9 +195,6 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
         executorService.shutdownNow();
     }
 
-    /**
-     * Creates a backup for a server using the Pterodactyl/Pelican client API.
-     */
     protected CompletableFuture<Boolean> createBackupRequest(String serverId, String backupName, List<String> excludedPaths) {
         return CompletableFuture.supplyAsync(() -> {
             if (isBlank(serverId) || !canMakeRequest("backup creation", serverId)) return false;
@@ -231,9 +228,6 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
         }, executorService);
     }
 
-    /**
-     * Lists all backups of a server using the Pterodactyl/Pelican client API.
-     */
     protected CompletableFuture<List<BackupInfo>> listBackupsRequest(String serverId) {
         return CompletableFuture.supplyAsync(() -> {
             List<BackupInfo> backups = new ArrayList<>();
@@ -270,9 +264,6 @@ public abstract class AbstractPanelAPIClient implements PanelAPIClient {
         }, executorService);
     }
 
-    /**
-     * Deletes a backup of a server using the Pterodactyl/Pelican client API.
-     */
     protected CompletableFuture<Boolean> deleteBackupRequest(String serverId, String backupUuid) {
         return CompletableFuture.supplyAsync(() -> {
             if (isBlank(serverId) || isBlank(backupUuid) || !canMakeRequest("backup deletion", serverId)) return false;

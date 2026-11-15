@@ -82,7 +82,6 @@ public class ConfigurationManager {
     private boolean moveHistoryEnabled;
     private int moveHistoryMaxEntries;
 
-    // Automatic backups
     private boolean backupsEnabled;
     private Set<BackupEvent> backupEvents = EnumSet.of(BackupEvent.SERVER_START, BackupEvent.SERVER_STOP);
     private int maxBackupsPerServer = 5;
@@ -195,7 +194,6 @@ public class ConfigurationManager {
                 moveHistoryMaxEntries = 50;
             }
 
-            // Backups section (defaults are set at field declaration)
             Section backups = config.getSection("backups");
             if (backups != null) {
                 backupsEnabled = backups.getBoolean("enabled", false);
@@ -382,14 +380,6 @@ public class ConfigurationManager {
             return serverInfoMap;
         }
 
-    /**
-     * Parses the optional per-server 'backups' section into a {@link BackupPolicy}.
-     * Unset fields stay null and inherit the global 'backups' config.
-     *
-     * @param serverSection the section of a single server under 'servers'
-     * @param serverKey the server name (for logging)
-     * @return the parsed policy, or null if the server has no 'backups' section
-     */
     private BackupPolicy parseBackupPolicy(Section serverSection, String serverKey) {
         Section section = serverSection.getSection("backups");
         if (section == null) return null;
@@ -404,17 +394,6 @@ public class ConfigurationManager {
                 parseBackupSchedule(section.getSection("schedule"), "servers." + serverKey + ".backups.schedule", false));
     }
 
-    /**
-     * Parses an optional 'schedule' section (global or per-server) into a {@link BackupSchedule}.
-     * Returns null when there is no schedule section. An enabled schedule with an invalid
-     * cron expression or timezone is logged and returned disabled, so a typo can never
-     * silently schedule backups at the wrong time — or crash config loading.
-     *
-     * @param section the schedule section, or null
-     * @param configPath the config path, for log messages
-     * @param global whether this is the global schedule (only it has a 'servers' list)
-     * @return the parsed schedule, or null if there is no schedule section
-     */
     private BackupSchedule parseBackupSchedule(Section section, String configPath, boolean global) {
         if (section == null) return null;
         Boolean enabled = section.getOptionalBoolean("enabled").orElse(null);
@@ -428,14 +407,14 @@ public class ConfigurationManager {
                 }
                 CronExpression.parse(cron);
             } catch (IllegalArgumentException ex) {
-                logger.error("Invalid cron expression '{}' in '{}': {} — scheduled backups disabled for it.",
+                logger.error("Invalid cron expression '{}' in '{}': {}, scheduled backups disabled for it.",
                         cron, configPath, ex.getMessage());
                 return new BackupSchedule(false, cron, timezone, servers);
             }
             try {
                 ZoneId.of(timezone != null && !timezone.isBlank() ? timezone.trim() : "UTC");
             } catch (Exception ex) {
-                logger.error("Invalid timezone '{}' in '{}': {} — scheduled backups disabled for it.",
+                logger.error("Invalid timezone '{}' in '{}': {}, scheduled backups disabled for it.",
                         timezone, configPath, ex.getMessage());
                 return new BackupSchedule(false, cron, timezone, servers);
             }
@@ -469,8 +448,6 @@ public class ConfigurationManager {
                 yield PanelType.pterodactyl;
             }
             case "c7sp" -> {
-                // Calagopus uses the Pterodactyl-compatible client API (/api/client/... with Bearer auth),
-                // but its backup endpoints differ (see CalagopusAPIClient), so it gets its own panel type.
                 logger.debug("Detected Calagopus panel from apiKey");
                 yield PanelType.calagopus;
             }
@@ -610,7 +587,7 @@ public class ConfigurationManager {
     public ServerCheckMethod getServerCheckMethod() {
         return serverCheckMethod;
     }
-    
+
     public int getMaxOnlineServers() {
         return maxOnlineServers;
     }
@@ -651,10 +628,8 @@ public class ConfigurationManager {
 
     public boolean isBackupsEnabled() { return backupsEnabled; }
 
-    /** The global cron schedule for automatic backups, or null if none is configured. */
     public BackupSchedule getBackupSchedule() { return backupSchedule; }
 
-    /** Whether any global cron schedule is enabled (per-server schedules are checked separately). */
     public boolean isBackupScheduleEnabled() {
         return backupSchedule != null && Boolean.TRUE.equals(backupSchedule.enabled());
     }
@@ -663,13 +638,10 @@ public class ConfigurationManager {
         return backupEvents == null ? Collections.emptySet() : backupEvents;
     }
 
-    /** Maximum number of automatic backups kept per server. 0 or less = unlimited (no deletion). */
     public int getMaxBackupsPerServer() { return maxBackupsPerServer; }
 
-    /** Minimum seconds between two automatic backups of the same server. 0 or less = no throttle. */
     public int getBackupMinIntervalSeconds() { return backupMinIntervalSeconds; }
 
-    /** Whether old automatic backups are pruned before the new backup is created (instead of after). */
     public boolean isPruneBackupsBeforeCreate() { return pruneBackupsBeforeCreate; }
 
     public String getBackupNamePrefix() {
@@ -680,18 +652,10 @@ public class ConfigurationManager {
         return backupExcludeServers == null ? Collections.emptyList() : backupExcludeServers;
     }
 
-    /** Glob paths excluded from automatic backup archives (Pterodactyl/Pelican 'ignored' field). */
     public List<String> getBackupExcludePaths() {
         return backupExcludePaths == null ? Collections.emptyList() : backupExcludePaths;
     }
 
-    /**
-     * Checks whether a server name matches any of the configured 'backups.excludeServers'
-     * glob patterns (case-insensitive, '*' matches any sequence, '?' any single char).
-     *
-     * @param serverName the Velocity name of the server
-     * @return true if the server is excluded from automatic backups
-     */
     public boolean isBackupExcluded(String serverName) {
         if (serverName == null || backupExcludeServers == null) return false;
         String name = serverName.toLowerCase(Locale.ROOT);

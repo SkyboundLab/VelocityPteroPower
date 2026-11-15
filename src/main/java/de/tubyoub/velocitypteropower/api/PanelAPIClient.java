@@ -51,36 +51,12 @@ public interface PanelAPIClient {
      * @return A future with resource usage information
      */
     CompletableFuture<de.tubyoub.velocitypteropower.model.ServerResourceUsage> fetchServerResources(String serverId);
-    /**
-     * Creates a backup of a server on the panel.
-     * Default implementation reports "unsupported" (used by panels without a backup API, e.g. Mc Server Soft).
-     *
-     * @param serverId      The unique identifier of the server on the panel.
-     * @param backupName    The name for the new backup (may be null/blank to let the panel choose).
-     * @param excludedPaths Glob paths to exclude from the backup (may be empty).
-     * @return A future that completes with {@code true} if the backup creation was accepted.
-     */
     default CompletableFuture<Boolean> createBackup(String serverId, String backupName, List<String> excludedPaths) {
         return CompletableFuture.completedFuture(false);
     }
-    /**
-     * Lists the backups of a server on the panel.
-     * Default implementation returns an empty list (unsupported panels).
-     *
-     * @param serverId The unique identifier of the server on the panel.
-     * @return A future with the backups of the server (possibly empty, never null).
-     */
     default CompletableFuture<List<BackupInfo>> listBackups(String serverId) {
         return CompletableFuture.completedFuture(Collections.emptyList());
     }
-    /**
-     * Deletes a backup of a server on the panel.
-     * Default implementation reports "unsupported".
-     *
-     * @param serverId   The unique identifier of the server on the panel.
-     * @param backupUuid The unique identifier of the backup to delete.
-     * @return A future that completes with {@code true} if the backup was deleted.
-     */
     default CompletableFuture<Boolean> deleteBackup(String serverId, String backupUuid) {
         return CompletableFuture.completedFuture(false);
     }

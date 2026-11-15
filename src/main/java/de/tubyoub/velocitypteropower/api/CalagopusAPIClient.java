@@ -16,42 +16,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Implementation of {@link PanelAPIClient} for Calagopus panels.
- *
- * <p>Calagopus exposes a Pterodactyl-compatible client API for most calls,
- * so this class extends {@link PterodactylAPIClient} and only overrides
- * the backup endpoints that differ:
- *
- * <ul>
- *   <li>Creating a backup: Calagopus (Rust/serde) requires an
- *       {@code ignored_files} JSON <em>array</em> in the payload — the field
- *       must be present even when empty. Pterodactyl's optional
- *       {@code ignored} newline-joined string is not accepted, and omitting
- *       the field fails with HTTP 400
- *       {@code "invalid payload: missing field `ignored_files`"}.
- *       See {@code backend/src/routes/api/client/servers/_server_/backups/mod.rs}
- *       in calagopus/panel ({@code post::Payload}).</li>
- *   <li>Listing backups: Calagopus nests the pagination under a
- *       {@code backups} key instead of returning it at the document root,
- *       so the Pterodactyl list parser would find nothing.</li>
- * </ul>
- *
- * <p>Permissions are also granular per endpoint: listing needs
- * {@code backups.read}, creating needs {@code backups.create} and pruning
- * needs {@code backups.delete}. A key missing one of those gets HTTP 403
- * on that call only — the other calls still work.
- */
 public class CalagopusAPIClient extends PterodactylAPIClient {
 
     public CalagopusAPIClient(VelocityPteroPower plugin) {
         super(plugin);
     }
 
-    /**
-     * Creates a backup with Calagopus's payload shape: {@code name} plus a
-     * mandatory {@code ignored_files} array (empty when nothing is excluded).
-     */
     @Override
     public CompletableFuture<Boolean> createBackup(String serverId, String backupName, List<String> excludedPaths) {
         return CompletableFuture.supplyAsync(() -> {
@@ -61,8 +31,6 @@ public class CalagopusAPIClient extends PterodactylAPIClient {
                 if (!isBlank(backupName)) {
                     payload.put("name", backupName);
                 }
-                // Required by Calagopus even when empty — serde rejects a
-                // missing field, and it must be an array, not a string.
                 payload.put("ignored_files", excludedPaths == null ? List.of() : new ArrayList<>(excludedPaths));
                 String body = JSON.writeValueAsString(payload);
                 HttpRequest request = clientApiRequest(serverId, "/backups")
@@ -86,13 +54,6 @@ public class CalagopusAPIClient extends PterodactylAPIClient {
         }, executorService);
     }
 
-    /**
-     * Lists backups in Calagopus's shape: the page is nested under a
-     * {@code backups} key, there is no {@code total_pages} (it is derived
-     * from {@code total}/{@code per_page}), and each backup is a flat
-     * {@code ApiServerBackup} ({@code uuid}/{@code name}/{@code created} —
-     * not {@code attributes.*}/{@code created_at} as in Pterodactyl).
-     */
     @Override
     public CompletableFuture<List<BackupInfo>> listBackups(String serverId) {
         return CompletableFuture.supplyAsync(() -> {
@@ -110,15 +71,11 @@ public class CalagopusAPIClient extends PterodactylAPIClient {
                         break;
                     }
                     JsonNode root = JSON.readTree(response.body());
-                    // Calagopus nests the page under "backups"; fall back to
-                    // the Pterodactyl shape (data at the document root).
                     JsonNode pageNode = root.path("backups");
                     if (pageNode.isMissingNode() || pageNode.isNull()) {
                         pageNode = root;
                     }
                     for (JsonNode backup : pageNode.path("data")) {
-                        // Calagopus items are flat; Pterodactyl nests fields
-                        // under "attributes".
                         JsonNode attributes = backup.path("attributes");
                         JsonNode node = attributes.isMissingNode() ? backup : attributes;
                         String uuid = node.path("uuid").asText(null);

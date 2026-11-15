@@ -23,14 +23,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Creates automatic backups of managed servers when configured events occur
- * (e.g. server start/stop, player join/leave) and enforces a retention limit
- * by deleting the oldest automatic backups of a server.
- *
- * Only backups whose name starts with the configured name prefix are counted
- * and deleted, so manually created backups on the panel are left untouched.
- */
 public class BackupManager {
 
     private final VelocityPteroPower plugin;
@@ -38,9 +30,7 @@ public class BackupManager {
     private final ConfigurationManager config;
     private final MessagesManager messages;
 
-    /** Servers with a backup operation currently in flight (prevents overlapping create/prune runs). */
     private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
-    /** Last time a backup was triggered per server id (for the min-interval throttle). */
     private final Map<String, Long> lastBackupAt = new ConcurrentHashMap<>();
 
     public BackupManager(VelocityPteroPower plugin) {
@@ -50,69 +40,26 @@ public class BackupManager {
         this.messages = plugin.getMessagesManager();
     }
 
-    /**
-     * Triggers a backup for a server if the power signal maps to an enabled backup event.
-     * START maps to {@link BackupEvent#SERVER_START}, STOP to {@link BackupEvent#SERVER_STOP}.
-     */
     public void onPowerSignal(String serverName, PowerSignal signal) {
-        // Deliberately avoid an enum switch here: it would generate a synthetic
-        // BackupManager$1 switch-map class, one more entry that a broken/truncated
-        // plugin jar on the server would fail to load (NoClassDefFoundError).
         BackupEvent event = null;
         if (signal == PowerSignal.START) {
             event = BackupEvent.SERVER_START;
         } else if (signal == PowerSignal.STOP) {
             event = BackupEvent.SERVER_STOP;
         }
-        // RESTART/KILL do not trigger backups
         if (event != null) {
             triggerBackup(serverName, event);
         }
     }
 
-    /**
-     * Triggers the backup a cron schedule resolved for this server, if any.
-     * Equivalent to {@link #triggerBackup(String, BackupEvent)} with
-     * {@link BackupEvent#SCHEDULED}.
-     *
-     * @return true if a backup was started, false if it was skipped
-     */
     public boolean triggerScheduledBackup(String serverName) {
         return triggerBackup(serverName, BackupEvent.SCHEDULED);
     }
 
-    /**
-     * Triggers a backup for a server because an admin ran {@code /ptero backup}.
-     * Equivalent to {@link #triggerBackup(String, BackupEvent)} with
-     * {@link BackupEvent#MANUAL}. A manual backup is an explicit admin action,
-     * so it runs even when event-based backups are disabled — but a per-server
-     * {@code backups.enabled: false} or an exclusion still opts the server out.
-     *
-     * @return true if a backup was started, false if it was skipped
-     */
     public boolean triggerManualBackup(String serverName) {
         return triggerBackup(serverName, BackupEvent.MANUAL);
     }
 
-    /**
-     * Triggers an automatic backup for the given server if the event is enabled in the config.
-     * The backup is created asynchronously; afterwards old automatic backups are pruned
-     * so that at most 'maxBackupsPerServer' remain.
-     *
-     * <p>A {@link BackupEvent#SCHEDULED} trigger comes from the cron scheduler
-     * ({@code backups.schedule}), so it is not gated on the {@code backups.events}
-     * list and not throttled by {@code minIntervalSeconds} — the cron expression
-     * itself is the schedule. The same applies to a {@link BackupEvent#MANUAL}
-     * trigger from {@code /ptero backup}: an admin explicitly asked for it.
-     * Both still respect the enabled flag, the server exclusions, retention
-     * and the in-flight guard, and an enabled schedule is enough to allow a
-     * scheduled backup even when the event-based {@code backups.enabled} is
-     * off (a per-server {@code backups.enabled: false} still opts out). A
-     * manual backup needs no enabled backup system at all — only a per-server
-     * opt-out stops it.
-     *
-     * @return true if a backup was started, false if it was skipped
-     */
     public boolean triggerBackup(String serverName, BackupEvent event) {
         String trackedServerId = null;
         try {
@@ -131,7 +78,6 @@ public class BackupManager {
             final String serverId = info.getServerId();
             trackedServerId = serverId;
 
-            // Per-server settings override the global 'backups' config
             BackupPolicy policy = info.getBackupPolicy();
             boolean enabled;
             if (policy != null && policy.enabled() != null) {
@@ -219,13 +165,6 @@ public class BackupManager {
         }
     }
 
-    /**
-     * Deletes the oldest automatic backups of a server so that at most
-     * {@code keep} backups with the configured name prefix remain.
-     * A negative value means unlimited (no deletion).
-     *
-     * @return a future that completes when all deletions have finished
-     */
     private CompletableFuture<Void> pruneOldBackups(String serverName, String serverId, List<BackupInfo> backups, int keep) {
         if (keep < 0 || backups == null || backups.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -280,9 +219,6 @@ public class BackupManager {
         }
     }
 
-    /**
-     * Builds a filesystem/panel-safe backup name, e.g. "vpp-auto-server_stop-survival-20261104-003000".
-     */
     private String buildBackupName(String serverName, BackupEvent event) {
         String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
                 .withZone(ZoneId.systemDefault())

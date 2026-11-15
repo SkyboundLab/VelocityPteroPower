@@ -24,36 +24,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Runs automatic backups on a cron schedule ({@code backups.schedule}).
- *
- * <p>Every 30 seconds it checks each effective schedule — the global one and
- * any per-server override — against the current time in that schedule's
- * timezone. When the current minute matches the cron expression, every server
- * the schedule covers gets one scheduled backup via
- * {@link BackupManager#triggerScheduledBackup(String)}. A schedule only fires
- * once per minute (tracked per schedule key), so a slow or repeated tick can
- * never double-fire, and a minute missed while the proxy was down is skipped
- * rather than backfilled.
- *
- * <p>The effective schedule is re-read from the live config on every tick, so
- * {@code /ptero reload} applies a changed cron expression without a restart.
- * Scheduled backups do not require the server to be online — the panel backs
- * up the files on disk — and they ignore {@code backups.events} and
- * {@code minIntervalSeconds} (the cron expression is the interval).
- */
 public class BackupSchedulerService {
 
-    /** How often the scheduler wakes up to check whether a minute matches. */
     private static final int CHECK_INTERVAL_SECONDS = 30;
 
     private final VelocityPteroPower plugin;
     private final FilteredComponentLogger logger;
     private ScheduledTask task;
 
-    /** Schedule key -> the minute (in that schedule's timezone) it last fired for. */
     private final Map<String, String> lastFiredMinute = new ConcurrentHashMap<>();
-    /** Cron expressions / timezones already warned about, so a bad config doesn't spam every tick. */
     private final Set<String> warnedInvalid = ConcurrentHashMap.newKeySet();
 
     public BackupSchedulerService(VelocityPteroPower plugin) {
@@ -61,7 +40,6 @@ public class BackupSchedulerService {
         this.logger = plugin.getFilteredLogger();
     }
 
-    /** Starts the periodic check. Safe to call when no schedule is configured — it just never fires. */
     public void start() {
         if (plugin.getApiClient() instanceof McServerSoftApiClient) {
             logger.warn("Scheduled backups are disabled: Mc Server Soft does not support the backup API.");
@@ -82,7 +60,6 @@ public class BackupSchedulerService {
         }
     }
 
-    /** Logs every effective schedule with its next run, so a typo'd cron is visible at startup/reload. */
     public void logScheduleSummary() {
         try {
             List<ResolvedSchedule> schedules = resolveSchedules();
@@ -92,7 +69,7 @@ public class BackupSchedulerService {
             }
             for (ResolvedSchedule schedule : schedules) {
                 ZonedDateTime next = schedule.cron.nextAfter(ZonedDateTime.now(schedule.zone));
-                logger.info("Scheduled backups: '{}' ({}) for {} — next run {}.",
+                logger.info("Scheduled backups: '{}' ({}) for {}, next run {}."
                         schedule.cron.getExpression(), schedule.zone.getId(),
                         String.join(", ", schedule.servers),
                         next != null ? next.toString() : "none in the next 4 years");
@@ -102,7 +79,6 @@ public class BackupSchedulerService {
         }
     }
 
-    /** One tick: fire every schedule whose cron matches the current minute in its timezone. */
     public void checkSchedules() {
         try {
             BackupManager backups = plugin.getBackupManager();
@@ -111,8 +87,6 @@ public class BackupSchedulerService {
                 ZonedDateTime now = ZonedDateTime.now(schedule.zone).truncatedTo(ChronoUnit.MINUTES);
                 if (!schedule.cron.matches(now)) continue;
                 String minuteKey = now.toString();
-                // put() returns the minute this schedule last fired for; if it is
-                // this minute, a previous tick already fired it — never double-fire.
                 if (minuteKey.equals(lastFiredMinute.put(schedule.key, minuteKey))) {
                     continue;
                 }
@@ -132,13 +106,6 @@ public class BackupSchedulerService {
         }
     }
 
-    /**
-     * Resolves the effective schedule for every managed server from the live config.
-     * A per-server schedule with {@code enabled: true} replaces the global one
-     * for that server (inheriting the global cron/timezone for any field it
-     * leaves unset); {@code enabled: false} opts the server out of scheduled
-     * backups entirely. Servers not covered by any enabled schedule are absent.
-     */
     private List<ResolvedSchedule> resolveSchedules() {
         ConfigurationManager config = plugin.getConfigurationManager();
         Map<String, PteroServerInfo> servers = plugin.getServerInfoMap();
@@ -151,7 +118,6 @@ public class BackupSchedulerService {
         String globalTimezone = globalEnabled ? global.effectiveTimezone("UTC") : null;
         List<String> globalServerFilter = globalEnabled && global.servers() != null ? global.servers() : List.of();
 
-        // Servers covered by the global schedule, before per-server overrides.
         Map<String, String> globalServers = new LinkedHashMap<>();
         if (globalEnabled && globalCron != null && !globalCron.isBlank()) {
             for (String name : servers.keySet()) {
@@ -197,14 +163,14 @@ public class BackupSchedulerService {
         try {
             cron = CronExpression.parse(cronText);
         } catch (IllegalArgumentException ex) {
-            warnOnce("cron-invalid:" + cronText, "Invalid backup cron expression '{}': {} — scheduled backups disabled for it.", cronText, ex.getMessage());
+            warnOnce("cron-invalid:" + cronText, "Invalid backup cron expression '{}': {}, scheduled backups disabled for it.", cronText, ex.getMessage());
             return null;
         }
         ZoneId zone;
         try {
             zone = ZoneId.of(zoneText != null && !zoneText.isBlank() ? zoneText.trim() : "UTC");
         } catch (Exception ex) {
-            warnOnce("tz-invalid:" + zoneText, "Invalid backup schedule timezone '{}': {} — scheduled backups disabled for it.", zoneText, ex.getMessage());
+            warnOnce("tz-invalid:" + zoneText, "Invalid backup schedule timezone '{}': {}, scheduled backups disabled for it.", zoneText, ex.getMessage());
             return null;
         }
         return new ResolvedSchedule(key, cron, zone, serverNames);

@@ -64,7 +64,6 @@ public enum MessageKey {
     POWER_ACTION_FAILED("power.action-failed"),
     POWER_STATUS("power.status"),
 
-    // Backups
     BACKUP_CREATED("backup.created"),
     BACKUP_DELETED("backup.deleted"),
     BACKUP_FAILED("backup.failed");
