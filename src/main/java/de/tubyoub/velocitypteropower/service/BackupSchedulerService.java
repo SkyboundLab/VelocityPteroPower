@@ -69,7 +69,7 @@ public class BackupSchedulerService {
             }
             for (ResolvedSchedule schedule : schedules) {
                 ZonedDateTime next = schedule.cron.nextAfter(ZonedDateTime.now(schedule.zone));
-                logger.info("Scheduled backups: '{}' ({}) for {}, next run {}."
+                logger.info("Scheduled backups: '{}' ({}) for {}, next run {}.",
                         schedule.cron.getExpression(), schedule.zone.getId(),
                         String.join(", ", schedule.servers),
                         next != null ? next.toString() : "none in the next 4 years");
